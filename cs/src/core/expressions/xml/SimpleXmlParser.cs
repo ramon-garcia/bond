@@ -20,8 +20,11 @@ namespace Bond.Expressions.Xml
     {
         static readonly Expression<Action<byte, XmlNodeType, string, string>> parsingError =
             (s, t, n, v) => ParsingError(s, t, n, v);
+
+        static readonly Expression<Action<XmlNodeType>> unexpectedNodeError = n => UnexpectedNodeError(n);
+
         delegate Expression ContainerItemHandler(Expression nextItem);
-        
+
         public SimpleXmlParser(RuntimeSchema schema)
             : base(schema, flatten: true)
         {}
@@ -30,7 +33,7 @@ namespace Bond.Expressions.Xml
             : base(Bond.Schema.GetRuntimeSchema(type), flatten: true)
         {}
 
-        private SimpleXmlParser(XmlParser<R> that, RuntimeSchema schema)
+        SimpleXmlParser(XmlParser<R> that, RuntimeSchema schema)
             : base(that, schema, flatten: true)
         {}
 
@@ -42,8 +45,8 @@ namespace Bond.Expressions.Xml
             {
                 InitialState = State.AtStructElement,
                 FinalState = State.Finished,
-                IgnoredTokens = new[] { XmlNodeType.Whitespace, XmlNodeType.Comment, XmlNodeType.Text },
-                Default = state => ThrowExpression.InvalidDataException("Unexpected node type"),
+                IgnoredTokens = new[] { XmlNodeType.Comment, XmlNodeType.Text, XmlNodeType.Whitespace, XmlNodeType.XmlDeclaration, },
+                Default = state => Expression.Invoke(unexpectedNodeError, Reader.NodeType),
                 TokenTransitions = new[]
                     {
                         new TokenTransition<XmlNodeType>
@@ -76,7 +79,7 @@ namespace Bond.Expressions.Xml
             };
         }
 
-        private Expression ProcessStructElement(Expression state)
+        Expression ProcessStructElement(Expression state)
         {
             return Expression.Block(
                 Expression.IfThenElse(
@@ -86,7 +89,7 @@ namespace Bond.Expressions.Xml
                 Reader.Read());
         }
         
-        private Expression ProcessFieldElement(
+        Expression ProcessFieldElement(
             Expression state, 
             ParameterExpression requiredFields, 
             IEnumerable<TransformSchemaPair> transforms)
@@ -238,14 +241,14 @@ namespace Bond.Expressions.Xml
                 handler(next));
         }
 
-        private Expression IfNotNodeType(XmlNodeType type, Expression then)
+        Expression IfNotNodeType(XmlNodeType type, Expression then)
         {
             return Expression.IfThen(
                 Expression.NotEqual(Reader.NodeType, Expression.Constant(type)),
                 then);
         }
 
-        private Expression NodeNameEquals(string localName, string namespaceUri)
+        Expression NodeNameEquals(string localName, string namespaceUri)
         {
             if (string.IsNullOrEmpty(namespaceUri))
             {
@@ -257,6 +260,11 @@ namespace Bond.Expressions.Xml
                 Expression.OrElse(
                     StringExpression.Equals(Reader.NamespaceURI, StringExpression.Empty(), StringComparison.OrdinalIgnoreCase),
                     StringExpression.Equals(Reader.NamespaceURI, namespaceUri, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        static void UnexpectedNodeError(XmlNodeType type)
+        {
+            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Unexpected node type: {0}", type));
         }
 
         Expression ParsingError(Expression state)
@@ -277,7 +285,7 @@ namespace Bond.Expressions.Xml
                 state, type, name, value));
         }
 
-        private static class State
+        static class State
         {
             public const byte AtStructElement = 1;
             public const byte InsideStructElement = 2;

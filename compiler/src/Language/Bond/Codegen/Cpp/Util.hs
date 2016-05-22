@@ -62,7 +62,8 @@ attributeInit :: [Attribute] -> Text
 attributeInit [] = "bond::reflection::Attributes()"
 attributeInit xs = [lt|boost::assign::map_list_of<std::string, std::string>#{newlineBeginSep 5 attrNameValue xs}|]
   where
-    attrNameValue Attribute {..} = [lt|("#{getIdlQualifiedName attrName}", "#{attrValue}")|]
+    idl = MappingContext idlTypeMapping [] [] []  
+    attrNameValue Attribute {..} = [lt|("#{getQualifiedName idl attrName}", "#{attrValue}")|]
 
 
 -- modifier tag type for a field
@@ -94,7 +95,7 @@ defaultValue _ _ _ = error "defaultValue: impossible happened."
 
 enumValue :: ToText a => MappingContext -> Type -> a -> Text
 enumValue cpp (BT_UserDefined e@Enum {..} _) x =
-    [lt|#{getGlobalQualifiedName cpp $ getDeclNamespace cpp e}::_bond_enumerators::#{declName}::#{x}|]
+    [lt|#{getQualifiedName cpp $ getDeclNamespace cpp e}::_bond_enumerators::#{declName}::#{x}|]
 enumValue _ _ _ = error "enumValue: impossible happened."
 
 -- schema metadata static member definitions
@@ -131,13 +132,13 @@ ifndef m = between [lt|
 #ifndef #{m}|] [lt|
 #endif|]
 
-enumDefinition :: Declaration -> Text 
+enumDefinition :: Declaration -> Text
 enumDefinition Enum {..} = [lt|enum #{declName}
         {
             #{commaLineSep 3 constant enumConstants}
         };|]
   where
     constant Constant {..} = [lt|#{constantName}#{optional value constantValue}|]
-    value x = [lt| = #{x}|]
+    value (-2147483648) = [lt| = static_cast<int32_t>(-2147483647-1)|]
+    value x = [lt| = static_cast<int32_t>(#{x})|]
 enumDefinition _ = error "enumDefinition: impossible happened."
-

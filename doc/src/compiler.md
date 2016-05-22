@@ -3,7 +3,7 @@
 Command line options
 ====================
 
-<div class="sourceCode"><object width="702" height="1000" data="gbc.html"/></div>
+<div class="sourceCode"><object width="100%" height="600" data="gbc.html"/></div>
 
 IDL syntax
 ==========
@@ -286,6 +286,63 @@ contained in Bond IDL files with the full fidelity. The compiler can also take
 the JSON representation of the AST as an input, enabling tools which 
 programmatically construct/modify Bond schemas.
 
+Example
+-------
+
+Given the following schema definition:
+
+    namespace example.some
+
+    struct SomeStruct
+    {
+        0: int32 someField = 123;
+    }
+
+Below is the JSON representation of the schema's Abstract Syntax Tree generated
+using `gbc schema example.bond` command:
+
+    {
+      "imports": [],
+      "namespaces": [
+        {
+          "name": [
+              "example",
+              "some"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "tag": "Struct",
+          "declNamespaces": [
+            {
+              "name": [
+                  "example",
+                  "some"
+              ]
+            }
+          ],
+          "declAttributes": [],
+          "declParams": [],
+          "declName": "SomeStruct",
+          "structFields": [
+            {
+              "fieldOrdinal": 0,
+              "fieldType": "int32",
+              "fieldName": "someField",
+              "fieldDefault": {
+                "value": 123,
+                "type": "integer"
+              }
+            }
+          ]
+        }
+      ]
+    } 
+    
+Bond
+----
+
 The top level JSON object represents the parsed Bond IDL file and has the 
 following structure:
 
@@ -297,6 +354,14 @@ following structure:
       "declarations": [
       ]
     }
+
+where:
+
+- `imports` is an array of [imports](#import).
+- `namespaces` is an array of [namespaces](#namespace). Each Bond file should
+have one namespace declaration, although the AST and IDL syntax have support
+for legacy schema files with multiple, language-specific namespaces. 
+- `declarations` is an array of [declarations](#declaration).
 
 Import
 ------
@@ -312,9 +377,7 @@ is represented in the AST as:
 Namespace
 ---------
 
-Each Bond file should have one namespace declaration, although the AST and IDL 
-syntax have support for legacy schema files with multiple, language-specific 
-namespaces. The namespace declaration is represented by a JSON object:
+The namespace declaration is represented by a JSON object:
 
     {
       "name": [
@@ -324,6 +387,19 @@ namespaces. The namespace declaration is represented by a JSON object:
 where:
 
 - `name` is [qualified name](#qualified-name) of the namespace.
+
+For example:
+
+    namespace foo.bar
+
+is represented as:
+
+    {
+      "name": [
+        "foo",
+        "bar"
+      ]
+    }
 
 Declaration
 -----------
@@ -360,7 +436,7 @@ A JSON object representing a `Struct` declaration has the following properties:
       "tag": "Struct",
       "declNamespaces": [
       ],
-      "declName": "Name",
+      "declName": "StructName",
       "declParams": [
       ],
       "declAttributes": [
@@ -384,7 +460,7 @@ A JSON object representing an `Enum` declaration has the following properties:
       "tag": "Enum",
       "declNamespaces": [
       ],
-      "declName": "Name",
+      "declName": "EnumName",
       "declAttributes": [
       ],
       "enumConstants": [
@@ -400,7 +476,7 @@ where:
 An enum constant is represented by the following JSON object:
 
     {
-      "constantName": "Name",
+      "constantName": "ConstantName",
       "constantValue": null
     }
 
@@ -418,7 +494,7 @@ A JSON object representing a type alias declaration has the following properties
       "tag": "Alias",
       "declNamespaces": [
       ],
-      "declName": "Name",
+      "declName": "AliasName",
       "declParams": [
       ],
       "aliasType": {
@@ -437,7 +513,7 @@ A JSON object representing a forward declaration has the following properties:
       "tag": "Forward",
       "declNamespaces": [
       ],
-      "declName": "Name",
+      "declName": "StructName",
       "declParams": [
       ]
     }
@@ -505,13 +581,15 @@ A struct field is represented by a JSON object with the following properties:
 
 where:
 
-- `fieldModifier` is one of the following strings: `"Optional"`, `"Required"`, 
-`"RequiredOptional"`.
+- `fieldModifier` is one of the following strings: `"Optional"`, `"Required"`,
+`"RequiredOptional"`. The property is optional and `fieldModifier` defaults to
+`Optional` if omitted.
 - `fieldDefault` is `null` or a [default value](#field-default-value). The 
 property is optional and may be omitted.
 - `fieldType` is a [type](#type).
 - `fieldName` is a string.
-- `fieldAttributes` is an array of zero or more [attributes](#attribute).
+- `fieldAttributes` is an array of zero or more [attributes](#attribute). The
+property is optional an may be omitted.
 - `fieldOrdinal` is an integer.
 
 ### Field default value
@@ -627,3 +705,66 @@ Other complex types are:
     - `arguments` is an array of zero or more [types](#type) representing type 
     arguments for a generic user defined type. The property is optional and
     may be omitted for non-generic types.
+
+Runtime Schema
+==============
+
+Bond defines `SchemaDef` structure to represent Bond schemas at runtime.
+`SchemaDef` is accepted as an argument by various Bond APIs. For example when
+transcoding binary payload into a text protocol like JSON, the `SchemaDef` of
+the payload is used to provide the necessary meta-data such as names of the
+fields.
+
+Usually `SchemaDef` is produced at runtime using Bond APIs. However in some
+scenarios it may be desirable to be able to obtain `SchemaDef` object(s)
+directly from a schema definition IDL file. The compiler can generate
+`SchemaDef` serialized in Simple JSON protocol which can be deserialized using
+standard Bond APIs.
+
+Example
+-------
+
+Given the following schema definition contained a file `example.bond`:
+
+    namespace example.some
+
+    struct SomeStruct
+    {
+        0: int32 someField = 123;
+    }
+
+The command `gbc schema --runtime-schema example.bond` would produce a file
+named `example.SomeStruct.json` with the following content:
+
+    {
+      "structs": [
+        {
+          "metadata": {
+            "qualified_name": "example.some.SomeStruct",
+            "name": "SomeStruct"
+          },
+          "fields": [
+            {
+              "metadata": {
+                "default_value": {
+                  "int_value": 123
+                },
+                "name": "someField"
+              },
+              "id": 0,
+              "type": {
+                "id": 16
+              }
+            }
+          ]
+        }
+      ]
+    }
+    
+Library
+=======
+
+The Bond IDL compiler and codegen functionality is accessible programatically
+via the [bond](https://hackage.haskell.org/package/bond) Haskell package. The
+library can be used to implement custom codegen tools. See examples/codegen in
+the repository.

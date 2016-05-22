@@ -40,43 +40,35 @@
         [Test]
         public void IntegerLimits()
         {
-            var limits = new[] { 
-                new BasicTypes 
-                {
-                    _int8 = sbyte.MaxValue, 
-                    _int16 = short.MaxValue,
-                    _int32 = int.MaxValue,
-                    _int64 = long.MaxValue,
-                    _uint8 = byte.MaxValue,
-                    _uint16 = ushort.MaxValue,
-                    _uint32 = uint.MaxValue,
-                    _uint64 = ulong.MaxValue
-                },
-                new BasicTypes {
-                    _int8 = sbyte.MinValue,
-                    _int16 = short.MinValue,
-                    _int32 = int.MinValue,
-                    _int64 = long.MinValue,
-                    _uint8 = byte.MinValue,
-                    _uint16 = ushort.MinValue,
-                    _uint32 = uint.MinValue,
-                    _uint64 = ulong.MinValue
-                }};
-
-            Util.RoundtripMemory<BasicTypes, BasicTypes> memoryRoundtrip = (serialize, deserialize) =>
+            Util.AllSerializeDeserialize<Integers, Integers>(new Integers 
             {
-                foreach (var from in limits)
-                {
-                    var data = serialize(from);
-                    var to = deserialize(data);
-                    Assert.IsTrue(from.IsEqual<BasicTypes>(to));
-                }
-            };
+                _int8 = sbyte.MaxValue, 
+                _int16 = short.MaxValue,
+                _int32 = int.MaxValue,
+                _int64 = long.MaxValue,
+                _uint8 = byte.MaxValue,
+                _uint16 = ushort.MaxValue,
+                _uint32 = uint.MaxValue,
+                // Note: not ulong.MaxValue because NewtonSoft JSON doesn't support it
+                _uint64 = long.MaxValue
+            });
 
-            memoryRoundtrip(Util.SerializeUnsafeCB, Util.DeserializeSafeCB<BasicTypes>);
-            memoryRoundtrip(Util.SerializeUnsafeCB, Util.DeserializeUnsafeCB<BasicTypes>);
-            memoryRoundtrip(Util.SerializeSP, Util.DeserializeSafeSP<BasicTypes, BasicTypes>);
-            memoryRoundtrip(Util.SerializeSP, Util.DeserializeUnsafeSP<BasicTypes, BasicTypes>);
+            Util.AllSerializeDeserialize<Integers, Integers>(new Integers 
+            {
+                _int8 = sbyte.MinValue,
+                _int16 = short.MinValue,
+                _int32 = int.MinValue,
+                _int64 = long.MinValue,
+                _uint8 = byte.MinValue,
+                _uint16 = ushort.MinValue,
+                _uint32 = uint.MinValue,
+                _uint64 = ulong.MinValue
+            });
+
+            Util.AllSerializeDeserialize<MaxUInt64, MaxUInt64>(new MaxUInt64
+            {
+                _uint64 = ulong.MaxValue
+            });
         }
 
         [Test]
@@ -198,6 +190,7 @@
 
             // TODO: for untagged protocol mismatch schema will be detected in schema validation
             test(Util.SerializeCB, Util.DeserializeCB<BondClass<To>>);
+            test(Util.SerializeCB2, Util.DeserializeCB2<BondClass<To>>);
         }
 
         [Test]
@@ -334,6 +327,31 @@
 
             // Don't omit required_optional fields
             TestPayloadSize(Util.SerializeCB, Util.TranscodeCBCB, new RequiredOptional(), 4);
+
+            // Omit optional fields set to default value
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new StructWithDefaults(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new ContainersOfNullable(), 8);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new NullableVectors(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new NullableLists(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new NullableBasicTypes(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Lists(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Vectors(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Sets(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Maps(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new StructWithBlobs(), 2);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Nothing(), 2);
+
+            // Don't skip empty container for field with default nothing
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Nothing { b = new ArraySegment<byte>(new byte[0]) }, 5);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Nothing { l = new LinkedList<string>() }, 5);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Nothing { s = new HashSet<double>() }, 5);
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new Nothing { m = new Dictionary<string, double>() }, 7);
+
+            // Don't omit required fields
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new BondClass<Int32>(), 4);
+
+            // Don't omit required_optional fields
+            TestPayloadSize(Util.SerializeCB2, Util.TranscodeCB2CB2, new RequiredOptional(), 5);
         }
 
         [Test]
@@ -421,7 +439,7 @@
             Assert.IsNotNull(new EnsureSpacesInPathsWork());
         }
 
-        private void TestTypePromotion<From, To>()
+        void TestTypePromotion<From, To>()
         {
             TestFieldSerialization<From, To>();
             TestFieldSerialization<List<From>, List<To>>();

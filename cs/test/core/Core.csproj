@@ -35,11 +35,14 @@
     <Compile Include="BondClass.cs" />
     <Compile Include="BondedTests.cs" />
     <Compile Include="CloningTests.cs" />
+    <Compile Include="CustomBondedTests.cs" />
     <Compile Include="EnumString.cs" />
     <Compile Include="Equal.cs" />
+    <Compile Include="GuidConversionTests.cs" />
     <Compile Include="InterfaceTests.cs" />
     <Compile Include="JsonParsingTests.cs" />
     <Compile Include="MetaInitializationTests.cs" />
+    <Compile Include="Partial.cs" />
     <Compile Include="properties\AssemblyInfo.cs" />
     <Compile Include="Random.cs" />
     <Compile Include="SerializationTests.cs" />
@@ -52,8 +55,8 @@
     <Compile Include="Util.cs" />
     <Compile Include="XmlTests.cs" />
     <BondCodegen Include="Aliases.bond">
-      <Options Condition="'$(TargetFrameworkVersion)' == 'v4.5'">$(BondOptions) --using="OrderedSet=SortedSet&lt;{0}&gt;" --using="Decimal=decimal" --using="EnumString=Alias.EnumString&lt;{0}&gt;" --using="Array={0}[]" --using=ArrayBlob=byte[] --using="SynchronizedList=SynchronizedCollection&lt;{0}&gt;"</Options>
-      <Options Condition="'$(TargetFrameworkVersion)' == 'v4.0'">$(BondOptions) --using="OrderedSet=SortedSet&lt;{0}&gt;" --using="Decimal=decimal" --using="EnumString=Alias.EnumString&lt;{0}&gt;" --using="Array={0}[]" --using=ArrayBlob=byte[]</Options>
+      <Options Condition="'$(TargetFrameworkVersion)' == 'v4.5'">$(BondOptions) --using="Lazy=Lazy&lt;{0}&gt;" --using="OrderedSet=SortedSet&lt;{0}&gt;" --using="Decimal=decimal" --using="EnumString=Alias.EnumString&lt;{0}&gt;" --using="Array={0}[]" --using=ArrayBlob=byte[] --using="SynchronizedList=SynchronizedCollection&lt;{0}&gt;"</Options>
+      <Options Condition="'$(TargetFrameworkVersion)' == 'v4.0'">$(BondOptions) --using="Lazy=Lazy&lt;{0}&gt;" --using="OrderedSet=SortedSet&lt;{0}&gt;" --using="Decimal=decimal" --using="EnumString=Alias.EnumString&lt;{0}&gt;" --using="Array={0}[]" --using=ArrayBlob=byte[]</Options>
     </BondCodegen>
     <BondCodegen Include="NamespaceConflict.bond" />
     <BondCodegen Include="NamespaceConflictBond.bond" />
@@ -87,10 +90,10 @@
       <HintPath>..\..\packages\NUnit.2.6.4\lib\nunit.framework.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json" Condition="'$(TargetFrameworkVersion)' == 'v4.5'">
-      <HintPath>..\..\packages\Newtonsoft.Json.6.0.5\lib\portable-net45+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.7.0.1\lib\portable-net45+wp80+win8+wpa81+dnxcore50\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json" Condition="'$(TargetFrameworkVersion)' == 'v4.0'">
-      <HintPath>..\..\packages\Newtonsoft.Json.6.0.5\lib\portable-net40+sl5+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.7.0.1\lib\portable-net40+sl5+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.ServiceModel" />
   </ItemGroup>

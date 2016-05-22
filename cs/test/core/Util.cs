@@ -5,15 +5,20 @@ namespace UnitTest
     using System.IO;
     using System.Linq;
     using System.Reflection;
+    using System.Runtime.InteropServices;
     using System.Text;
     using System.Xml;
+    using RMarshal = System.Runtime.InteropServices.Marshal;
     using NUnit.Framework;
     using Bond;
     using Bond.Protocols;
     using Bond.IO.Unsafe;
+    using Marshal = Bond.Marshal;
 
     public static class Util
     {
+        private const int UnsafeBufferSize = 192 * 1024;
+
         public static IEnumerable<MethodInfo> GetDeclaredMethods(this Type type, string name)
         {
             return type.GetMethods().Where(m => m.Name == name);
@@ -43,10 +48,34 @@ namespace UnitTest
             output.Flush();
         }
 
+        public static void TranscodeCB2CB2(Stream from, Stream to)
+        {
+            var input = new InputStream(from, 11);
+            var reader = new CompactBinaryReader<InputStream>(input, 2);
+
+            var output = new OutputStream(to, 19);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Transcode.FromTo(reader, writer);
+            output.Flush();
+        }
+
         public static void TranscodeCBFB(Stream from, Stream to)
         {
             var input = new InputStream(from, 11);
             var reader = new CompactBinaryReader<InputStream>(input);
+
+            var output = new OutputStream(to, 19);
+            var writer = new FastBinaryWriter<OutputStream>(output);
+
+            Transcode.FromTo(reader, writer);
+            output.Flush();
+        }
+
+        public static void TranscodeCB2FB(Stream from, Stream to)
+        {
+            var input = new InputStream(from, 11);
+            var reader = new CompactBinaryReader<InputStream>(input, 2);
 
             var output = new OutputStream(to, 19);
             var writer = new FastBinaryWriter<OutputStream>(output);
@@ -173,6 +202,18 @@ namespace UnitTest
             output.Flush();
         }
 
+        public static void TranscodeSPCB2<From>(Stream from, Stream to)
+        {
+            var input = new InputStream(from, 11);
+            var reader = new SimpleBinaryReader<InputStream>(input);
+
+            var output = new OutputStream(to, 19);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Transcode<From>.FromTo(reader, writer);
+            output.Flush();
+        }
+
         public static void TranscodeSPFB<From>(Stream from, Stream to)
         {
             var input = new InputStream(from, 11);
@@ -207,6 +248,8 @@ namespace UnitTest
             Transcode<From>.FromTo(reader, writer);
             writer.Flush();
         }
+
+        // CompactBinary v1:
 
         public static void SerializeCB<T>(T obj, Stream stream)
         {
@@ -271,12 +314,31 @@ namespace UnitTest
             return output.Data;
         }
 
+        public static IntPtr SerializePointerCB<T>(T obj, IntPtr ptr, int length)
+        {
+            var output = new OutputPointer(ptr, length);
+            var writer = new CompactBinaryWriter<OutputPointer>(output);
+
+            Serialize.To(writer, obj);
+            return output.Data;
+        }
+
         public static ArraySegment<byte> SerializeSafeCB<T>(T obj)
         {
             var output = new Bond.IO.Safe.OutputBuffer(new byte[11]);
             var writer = new CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>(output);
 
             Serialize.To(writer, obj);
+            return output.Data;
+        }
+
+        public static ArraySegment<byte> SerializeSafeCBNoInlining<T>(T obj)
+        {
+            var output = new Bond.IO.Safe.OutputBuffer(new byte[11]);
+            var writer = new CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>(output);
+
+            var serializer = new Serializer<CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>>(typeof(T), false);
+            serializer.Serialize(obj, writer);
             return output.Data;
         }
 
@@ -303,6 +365,141 @@ namespace UnitTest
 
             return Deserialize<T>.From(reader);
         }
+
+        public static T DeserializePointerCB<T>(IntPtr data, int length)
+        {
+            var input = new InputPointer(data, length);
+            var reader = new CompactBinaryReader<InputPointer>(input);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        // CompactBinary v2:
+
+        public static void SerializeCB2<T>(T obj, Stream stream)
+        {
+            var output = new OutputStream(stream, 11);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Serialize.To(writer, obj);
+            output.Flush();
+        }
+
+        public static void MarshalCB2<T>(T obj, Stream stream)
+        {
+            var output = new OutputStream(stream, 11);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Marshal.To(writer, obj);
+            output.Flush();
+        }
+
+        public static void SerializerMarshalCB2<T>(T obj, Stream stream)
+        {
+            var output = new OutputStream(stream, 11);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+            var serializer = new Serializer<CompactBinaryWriter<OutputStream>>(typeof(T));
+            serializer.Marshal(obj, writer);
+            output.Flush();
+        }
+
+        public static ArraySegment<byte> MarshalCB2<T>(T obj)
+        {
+            var output = new OutputBuffer(new byte[11]);
+            var writer = new CompactBinaryWriter<OutputBuffer>(output, 2);
+
+            Marshal.To(writer, obj);
+            return output.Data;
+        }
+
+        public static void SerializeCB2<T>(IBonded<T> obj, Stream stream)
+        {
+            var output = new OutputStream(stream, 11);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Serialize.To(writer, obj);
+            output.Flush();
+        }
+
+        public static void SerializeCB2(IBonded obj, Stream stream)
+        {
+            var output = new OutputStream(stream, 11);
+            var writer = new CompactBinaryWriter<OutputStream>(output, 2);
+
+            Serialize.To(writer, obj);
+            output.Flush();
+        }
+
+        public static ArraySegment<byte> SerializeUnsafeCB2<T>(T obj)
+        {
+            var output = new OutputBuffer();
+            var writer = new CompactBinaryWriter<OutputBuffer>(output, 2);
+
+            Serialize.To(writer, obj);
+            return output.Data;
+        }
+
+        public static IntPtr SerializePointerCB2<T>(T obj, IntPtr ptr, int length)
+        {
+            var output = new OutputPointer(ptr, length);
+            var writer = new CompactBinaryWriter<OutputPointer>(output, 2);
+
+            Serialize.To(writer, obj);
+            return output.Data;
+        }
+
+        public static ArraySegment<byte> SerializeSafeCB2<T>(T obj)
+        {
+            var output = new Bond.IO.Safe.OutputBuffer(new byte[11]);
+            var writer = new CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>(output, 2);
+
+            Serialize.To(writer, obj);
+            return output.Data;
+        }
+
+        public static ArraySegment<byte> SerializeSafeCB2NoInlining<T>(T obj)
+        {
+            var output = new Bond.IO.Safe.OutputBuffer(new byte[11]);
+            var writer = new CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>(output, 2);
+
+            var serializer = new Serializer<CompactBinaryWriter<Bond.IO.Safe.OutputBuffer>>(typeof(T), false);
+            serializer.Serialize(obj, writer);
+            return output.Data;
+        }
+
+        public static T DeserializeCB2<T>(Stream stream)
+        {
+            var input = new InputStream(stream);
+            var reader = new CompactBinaryReader<InputStream>(input, 2);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        public static T DeserializeSafeCB2<T>(ArraySegment<byte> data)
+        {
+            var input = new Bond.IO.Safe.InputBuffer(data);
+            var reader = new CompactBinaryReader<Bond.IO.Safe.InputBuffer>(input, 2);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        public static T DeserializeUnsafeCB2<T>(ArraySegment<byte> data)
+        {
+            var input = new InputBuffer(data);
+            var reader = new CompactBinaryReader<InputBuffer>(input, 2);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        public static T DeserializePointerCB2<T>(IntPtr data, int length)
+        {
+            var input = new InputPointer(data, length);
+            var reader = new CompactBinaryReader<InputPointer>(input, 2);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        // FastBinary:
 
         public static void SerializeFB<T>(T obj, Stream stream)
         {
@@ -391,13 +588,31 @@ namespace UnitTest
             return Deserialize<T>.From(reader);
         }
 
-        public static void SerializeSP<T>(T obj, Stream stream)
+        public static T DeserializePointerFB<T>(IntPtr data, int length)
+        {
+            var input = new InputPointer(data, length);
+            var reader = new FastBinaryReader<InputPointer>(input);
+
+            return Deserialize<T>.From(reader);
+        }
+
+        public static void SerializeSP<T>(T obj, Stream stream, ushort version)
         {
             var output = new OutputStream(stream, 11);
-            var writer = new SimpleBinaryWriter<OutputStream>(output);
+            var writer = new SimpleBinaryWriter<OutputStream>(output, version);
 
             Serialize.To(writer, obj);
             output.Flush();
+        }
+
+        public static void SerializeSP<T>(T obj, Stream stream)
+        {
+            SerializeSP(obj, stream, 1);
+        }
+
+        public static void SerializeSP2<T>(T obj, Stream stream)
+        {
+            SerializeSP(obj, stream, 2);
         }
 
         public static void SerializeSP<T>(IBonded<T> obj, Stream stream)
@@ -409,13 +624,23 @@ namespace UnitTest
             output.Flush();
         }
 
-        public static ArraySegment<byte> SerializeSP<T>(T obj)
+        public static ArraySegment<byte> SerializeSP<T>(T obj, ushort version)
         {
             var output = new OutputBuffer();
-            var writer = new SimpleBinaryWriter<OutputBuffer>(output);
+            var writer = new SimpleBinaryWriter<OutputBuffer>(output, version);
 
             Serialize.To(writer, obj);
             return output.Data;
+        }
+
+        public static ArraySegment<byte> SerializeSP<T>(T obj)
+        {
+            return SerializeSP(obj, 1);
+        }
+
+        public static ArraySegment<byte> SerializeSP2<T>(T obj)
+        {
+            return SerializeSP(obj, 2);
         }
 
         public static void SerializeJson<T>(T obj, Stream stream)
@@ -434,29 +659,68 @@ namespace UnitTest
             output.Flush();
         }
 
-        public static To DeserializeSP<From, To>(Stream stream)
+        public static To DeserializeSP<From, To>(Stream stream, ushort version)
         {
             var input = new InputStream(stream);
-            var reader = new SimpleBinaryReader<InputStream>(input);
+            var reader = new SimpleBinaryReader<InputStream>(input, version);
             var deserializer = new Deserializer<SimpleBinaryReader<InputStream>>(typeof(To), Schema<From>.RuntimeSchema);
+
+            return deserializer.Deserialize<To>(reader);
+        }
+
+        public static To DeserializeSP<From, To>(Stream stream)
+        {
+            return DeserializeSP<From, To>(stream, 1);
+        }
+
+        public static To DeserializeSP2<From, To>(Stream stream)
+        {
+            return DeserializeSP<From, To>(stream, 2);
+        }
+
+        public static To DeserializeSafeSP<From, To>(ArraySegment<byte> data, ushort version)
+        {
+            var input = new Bond.IO.Safe.InputBuffer(data.Array, data.Offset, data.Count);
+            var reader = new SimpleBinaryReader<Bond.IO.Safe.InputBuffer>(input, version);
+            var deserializer = new Deserializer<SimpleBinaryReader<Bond.IO.Safe.InputBuffer>>(typeof(To), Schema<From>.RuntimeSchema);
 
             return deserializer.Deserialize<To>(reader);
         }
 
         public static To DeserializeSafeSP<From, To>(ArraySegment<byte> data)
         {
-            var input = new Bond.IO.Safe.InputBuffer(data.Array, data.Offset, data.Count);
-            var reader = new SimpleBinaryReader<Bond.IO.Safe.InputBuffer>(input);
-            var deserializer = new Deserializer<SimpleBinaryReader<Bond.IO.Safe.InputBuffer>>(typeof(To), Schema<From>.RuntimeSchema);
+            return DeserializeSafeSP<From, To>(data, 1);
+        }
+
+        public static To DeserializeSafeSP2<From, To>(ArraySegment<byte> data)
+        {
+            return DeserializeSafeSP<From, To>(data, 2);
+        }
+
+        public static To DeserializeUnsafeSP<From, To>(ArraySegment<byte> data, ushort version)
+        {
+            var input = new InputBuffer(data);
+            var reader = new SimpleBinaryReader<InputBuffer>(input, version);
+            var deserializer = new Deserializer<SimpleBinaryReader<InputBuffer>>(typeof(To), Schema<From>.RuntimeSchema);
 
             return deserializer.Deserialize<To>(reader);
         }
 
         public static To DeserializeUnsafeSP<From, To>(ArraySegment<byte> data)
         {
-            var input = new InputBuffer(data);
-            var reader = new SimpleBinaryReader<InputBuffer>(input);
-            var deserializer = new Deserializer<SimpleBinaryReader<InputBuffer>>(typeof(To), Schema<From>.RuntimeSchema);
+            return DeserializeUnsafeSP<From, To>(data, 1);
+        }
+
+        public static To DeserializeUnsafeSP2<From, To>(ArraySegment<byte> data)
+        {
+            return DeserializeUnsafeSP<From, To>(data, 2);
+        }
+
+        public static To DeserializePointerSP<From, To>(IntPtr data, int length)
+        {
+            var input = new InputPointer(data, length);
+            var reader = new SimpleBinaryReader<InputPointer>(input);
+            var deserializer = new Deserializer<SimpleBinaryReader<InputPointer>>(typeof(To), Schema<From>.RuntimeSchema);
 
             return deserializer.Deserialize<To>(reader);
         }
@@ -495,14 +759,14 @@ namespace UnitTest
             return Deserialize<T>.From(reader);
         }
 
-        public static T DeserializeTagged<T>(ITaggedProtocolReader reader)
+        public static T DeserializeTagged<T>(IClonableTaggedProtocolReader reader)
         {
             return Deserialize<T>.From(reader);
         }
 
-        public static To DeserializeUntagged<From, To>(IUntaggedProtocolReader reader)
+        public static To DeserializeUntagged<From, To>(IClonableUntaggedProtocolReader reader)
         {
-            var deserializer = new Deserializer<IUntaggedProtocolReader>(typeof(To), Schema<From>.RuntimeSchema);
+            var deserializer = new Deserializer<IClonableUntaggedProtocolReader>(typeof(To), Schema<From>.RuntimeSchema);
             return deserializer.Deserialize<To>(reader);
         }
 
@@ -528,6 +792,19 @@ namespace UnitTest
             return new Bonded<T, CompactBinaryReader<InputStream>>(reader);
         }
 
+        public static IBonded<T> MakeBondedCB2<T>(T obj)
+        {
+            var stream = new MemoryStream();
+            SerializeCB2(obj, stream);
+            stream.Position = 0;
+            // Create new MemoryStream at non-zero offset in a buffer
+            var buffer = new byte[stream.Length + 2];
+            stream.Read(buffer, 1, buffer.Length - 2);
+            var input = new InputStream(new MemoryStream(buffer, 1, buffer.Length - 2, false, true));
+            var reader = new CompactBinaryReader<InputStream>(input, 2);
+            return new Bonded<T, CompactBinaryReader<InputStream>>(reader);
+        }
+
         public static IBonded<T> MakeBondedSP<T>(T obj)
         {
             var stream = new MemoryStream();
@@ -546,6 +823,8 @@ namespace UnitTest
         public delegate void MarshalMemory<From>(Func<From, ArraySegment<byte>> serialize);
         public delegate void TranscodeStream<From, To>(Action<From, Stream> serialize, Action<Stream, Stream> transcode, Func<Stream, To> deserialize);
         public delegate void RoundtripMemory<From, To>(Func<From, ArraySegment<byte>> serialize, Func<ArraySegment<byte>, To> deserialize);
+        public delegate void RoundtripPointer<From, To>(Func<From, IntPtr, int, IntPtr> serialize, Func<IntPtr, int, To> deserialize);
+        public delegate void RoundtripMemoryPointer<From, To>(Func<From, ArraySegment<byte>> serialize, Func<IntPtr, int, To> deserialize);
 
         public static void AllSerializeDeserialize<From, To>(From from, bool noTranscoding = false)
             where From : class
@@ -556,6 +835,24 @@ namespace UnitTest
                 var data = serialize(from);
                 var to = deserialize(data);
                 Assert.IsTrue(from.IsEqual(to));
+            };
+
+            RoundtripPointer<From, To> pointerRoundtrip = (serialize, deserialize) =>
+            {
+                var ptr = RMarshal.AllocHGlobal(UnsafeBufferSize);
+                var data = serialize(from, ptr, UnsafeBufferSize);
+                var to = deserialize(data, UnsafeBufferSize);
+                Assert.IsTrue(from.IsEqual(to));
+                RMarshal.FreeHGlobal(data);
+            };
+
+            RoundtripMemoryPointer<From, To> memoryPointerRoundtrip = (serialize, deserialize) =>
+            {
+                var data = serialize(from);
+                var pinned = GCHandle.Alloc(data.Array, GCHandleType.Pinned);
+                var to = deserialize(RMarshal.UnsafeAddrOfPinnedArrayElement(data.Array, data.Offset), data.Count);
+                Assert.IsTrue(from.IsEqual(to));
+                pinned.Free();
             };
 
             RoundtripStream<From, To> streamRoundtrip = (serialize, deserialize) =>
@@ -607,8 +904,13 @@ namespace UnitTest
             streamRoundtrip(SerializeCB, DeserializeCB<To>);
             memoryRoundtrip(SerializeUnsafeCB, DeserializeSafeCB<To>);
             memoryRoundtrip(SerializeUnsafeCB, DeserializeUnsafeCB<To>);
+            memoryPointerRoundtrip(SerializeUnsafeCB, DeserializePointerCB<To>);
+            pointerRoundtrip(SerializePointerCB, DeserializePointerCB<To>);
             memoryRoundtrip(SerializeSafeCB, DeserializeSafeCB<To>);
             memoryRoundtrip(SerializeSafeCB, DeserializeUnsafeCB<To>);
+            memoryPointerRoundtrip(SerializeSafeCB, DeserializePointerCB<To>);
+            memoryRoundtrip(SerializeSafeCBNoInlining, DeserializeSafeCB<To>);
+
             streamMarshal(MarshalCB);
             streamMarshal(SerializerMarshalCB);
             streamMarshalSchema(MarshalCB);
@@ -625,10 +927,39 @@ namespace UnitTest
                 return DeserializeTagged<To>(reader);
             });
 
+            // Compact Binary v2
+            streamRoundtrip(SerializeCB2, DeserializeCB2<To>);
+            memoryRoundtrip(SerializeUnsafeCB2, DeserializeSafeCB2<To>);
+            memoryRoundtrip(SerializeUnsafeCB2, DeserializeUnsafeCB2<To>);
+            memoryPointerRoundtrip(SerializeUnsafeCB2, DeserializePointerCB2<To>);
+            pointerRoundtrip(SerializePointerCB2, DeserializePointerCB2<To>);
+            memoryRoundtrip(SerializeSafeCB2, DeserializeSafeCB2<To>);
+            memoryRoundtrip(SerializeSafeCB2, DeserializeUnsafeCB2<To>);
+            memoryPointerRoundtrip(SerializeSafeCB2, DeserializePointerCB2<To>);
+            memoryRoundtrip(SerializeSafeCB2NoInlining, DeserializeSafeCB2<To>);
+
+            streamMarshal(MarshalCB2);
+            streamMarshal(SerializerMarshalCB2);
+            streamMarshalSchema(MarshalCB2);
+            streamMarshalNoSchema(MarshalCB2);
+            memoryMarshal(MarshalCB2);
+
+            streamTranscode(SerializeCB2, TranscodeCB2CB2, DeserializeCB2<To>);
+            streamTranscode(SerializeCB2, TranscodeCB2FB, DeserializeFB<To>);
+
+            streamRoundtrip(SerializeCB2, stream =>
+            {
+                var input = new InputStream(stream);
+                var reader = new CompactBinaryReader<InputStream>(input, 2);
+                return DeserializeTagged<To>(reader);
+            });
+
             // Fast Binary
             streamRoundtrip(SerializeFB, DeserializeFB<To>);
             memoryRoundtrip(SerializeFB, DeserializeSafeFB<To>);
             memoryRoundtrip(SerializeFB, DeserializeUnsafeFB<To>);
+            memoryPointerRoundtrip(SerializeFB, DeserializePointerFB<To>);
+
             streamMarshal(MarshalFB);
             streamMarshal(SerializerMarshalFB);
             streamMarshalSchema(MarshalFB);
@@ -651,14 +982,30 @@ namespace UnitTest
                 streamRoundtrip(SerializeSP, DeserializeSP<From, To>);
                 memoryRoundtrip(SerializeSP, DeserializeSafeSP<From, To>);
                 memoryRoundtrip(SerializeSP, DeserializeUnsafeSP<From, To>);
+                memoryPointerRoundtrip(SerializeSP, DeserializePointerSP<From, To>);
+
+                streamRoundtrip(SerializeSP2, DeserializeSP2<From, To>);
+                memoryRoundtrip(SerializeSP2, DeserializeSafeSP2<From, To>);
+                memoryRoundtrip(SerializeSP2, DeserializeUnsafeSP2<From, To>);
 
                 streamTranscode(SerializeCB, TranscodeCBSP<From>, DeserializeSP<From, To>);
                 streamTranscode(SerializeFB, TranscodeFBSP<From>, DeserializeSP<From, To>);
                 streamTranscode(SerializeSP, TranscodeSPSP<From>, DeserializeSP<From, To>);
                 streamTranscode(SerializeSP, TranscodeSPCB<From>, DeserializeCB<To>);
+                streamTranscode(SerializeSP, TranscodeSPCB2<From>, DeserializeCB2<To>);
                 streamTranscode(SerializeSP, TranscodeSPFB<From>, DeserializeFB<To>);
-                streamTranscode(SerializeSP, TranscodeSPXml<From>, DeserializeXml<To>);
-                streamTranscode(SerializeSP, TranscodeSPJson<From>, DeserializeJson<To>);
+
+                // Pull parser doesn't support bonded<T>
+                if (AnyField<From>(Reflection.IsBonded))
+                {
+                    streamTranscode(SerializeSP, TranscodeSPXml<From>, DeserializeXml<To>);
+                
+                    // NewtonSoft JSON doesn't support uint64
+                    if (typeof (From) != typeof (MaxUInt64))
+                    {
+                        streamTranscode(SerializeSP, TranscodeSPJson<From>, DeserializeJson<To>);
+                    }
+                }
 
                 streamRoundtrip(SerializeSP, stream =>
                 {
@@ -670,12 +1017,38 @@ namespace UnitTest
                 streamMarshalSchema(MarshalSP);
             }
 
-            streamRoundtrip(SerializeXml, DeserializeXml<To>);
-            streamRoundtrip(SerializeJson, DeserializeJson<To>);
-            streamTranscode(SerializeCB, TranscodeCBXml<From>, DeserializeXml<To>);
-            streamTranscode(SerializeCB, TranscodeCBJson<From>, DeserializeJson<To>);
-            streamTranscode(SerializeFB, TranscodeFBXml<From>, DeserializeXml<To>);
-            streamTranscode(SerializeFB, TranscodeFBJson<From>, DeserializeJson<To>);
+            // Pull parser doesn't supprot bonded<T>
+            if (AnyField<From>(Reflection.IsBonded))
+            {
+                streamRoundtrip(SerializeXml, DeserializeXml<To>);
+                streamTranscode(SerializeCB, TranscodeCBXml<From>, DeserializeXml<To>);
+                streamTranscode(SerializeFB, TranscodeFBXml<From>, DeserializeXml<To>);
+
+                // NewtonSoft JSON doesn't support uint64
+                if (typeof (From) != typeof (MaxUInt64))
+                {
+                    streamRoundtrip(SerializeJson, DeserializeJson<To>);
+                    streamTranscode(SerializeCB, TranscodeCBJson<From>, DeserializeJson<To>);
+                    streamTranscode(SerializeFB, TranscodeFBJson<From>, DeserializeJson<To>);
+                }
+            }
+        }
+
+        delegate bool TypePredicate(Type field);
+
+        static bool AnyField<T>(TypePredicate predicate)
+        {
+            var types = new HashSet<Type>();
+            return AnyField(types, typeof(T), predicate);
+        }
+
+        static bool AnyField(HashSet<Type> types, Type type, TypePredicate predicate)
+        {
+            types.Add(type);
+            return type.GetSchemaFields()
+                .Select(field => field.MemberType)
+                .Where(fieldType => !types.Contains(fieldType))
+                .Any(fieldType => predicate(fieldType) || fieldType.IsBondStruct() && AnyField(types, fieldType, predicate));
         }
     }
 }

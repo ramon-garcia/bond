@@ -22,7 +22,25 @@ tests = testGroup "Compiler tests"
             , testCase "generics" $ compareAST "generics"
             , testCase "inheritance" $ compareAST "inheritance"
             , testCase "type aliases" $ compareAST "aliases"
+            , testCase "documentation example" $ compareAST "example"
             ]
+        ]
+    , testGroup "SchemaDef"
+        [ verifySchemaDef "attributes" "Foo"
+        , verifySchemaDef "basic_types" "BasicTypes"
+        , verifySchemaDef "defaults" "Foo"
+        , verifySchemaDef "field_modifiers" "Foo"
+        , verifySchemaDef "inheritance" "Foo"
+        , verifySchemaDef "alias_key" "foo"
+        , verifySchemaDef "maybe_blob" "Foo"
+        , verifySchemaDef "nullable_alias" "foo"
+        , verifySchemaDef "schemadef" "AliasBase"
+        , verifySchemaDef "schemadef" "EnumDefault"
+        , verifySchemaDef "schemadef" "StringTree"
+        , verifySchemaDef "example" "SomeStruct"
+        ]
+    , testGroup "Types"
+        [ testCase "type alias resolution" aliasResolution
         ]
     , testGroup "Codegen"
         [ testGroup "C++"
@@ -36,6 +54,7 @@ tests = testGroup "Compiler tests"
             , verifyCppCodegen "inheritance"
             , verifyCppCodegen "aliases"
             , verifyCppCodegen "alias_key"
+            , verifyCppCodegen "maybe_blob"
             , verifyCodegen
                 [ "c++"
                 , "--allocator=arena"
@@ -77,7 +96,7 @@ tests = testGroup "Compiler tests"
             , verifyCsCodegen "generics"
             , verifyCsCodegen "inheritance"
             , verifyCsCodegen "aliases"
-            , verifyCodegen 
+            , verifyCodegen
                 [ "c#"
                 , "--using=time=System.DateTime"
                 ]

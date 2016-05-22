@@ -11,3 +11,11 @@ enum Fruit
     Apple = 1,
     Orange = 2,
 }
+
+enum Limits
+{
+    Int32Min = -2147483648,
+    Int32Max = 2147483647,
+    UInt32Min = 0,
+    UInt32Max = 0xFFFFFFFF,
+}

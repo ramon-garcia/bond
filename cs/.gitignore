@@ -19,5 +19,8 @@ _ReSharper.*
 *.sdf
 *.suo
 *.user
+*.opendb
 *.opensdf
 *.psess
+*.VC.db
+.vs/

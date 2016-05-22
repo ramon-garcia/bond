@@ -68,7 +68,21 @@
                     }
                     else if (fromProtocol == "schema")
                     {
-                        var schema = Unmarshal<SchemaDef>.From(input);
+                        SchemaDef schema;
+
+                        var c = (char)inputStream.ReadByte();
+                        inputStream.Seek(0, SeekOrigin.Begin);
+
+                        if (c == '{')
+                        {
+                            var reader = new SimpleJsonReader(inputStream);
+                            schema = Deserialize<SchemaDef>.From(reader);
+                        }
+                        else
+                        {
+                            schema = Unmarshal<SchemaDef>.From(input);   
+                        }
+
                         if (!Comparer.Equal(schema, Schema<Compat>.RuntimeSchema.SchemaDef))
                         {
                             Console.WriteLine("SchemaDef is different");
@@ -90,6 +104,11 @@
             if (toProtocol == "compact")
             {
                 var writer = new CompactBinaryWriter<OutputStream>(output);
+                Serialize.To(writer, Deserialize<Compat>.From(reader));
+            }
+            else if (toProtocol == "compact2")
+            {
+                var writer = new CompactBinaryWriter<OutputStream>(output, 2);
                 Serialize.To(writer, Deserialize<Compat>.From(reader));
             }
             else if (toProtocol == "fast")

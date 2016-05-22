@@ -749,15 +749,16 @@
                                                                                                                                 $reader.LocalName,
                                                                                                                                 $reader.Value)
                                                                                                                     }
-                                                                                                            .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
                                                                                                             .Case (.Constant<System.Xml.XmlNodeType>(Comment)):
                                                                                                             .Case (.Constant<System.Xml.XmlNodeType>(Text)):
+                                                                                                            .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
+                                                                                                            .Case (.Constant<System.Xml.XmlNodeType>(XmlDeclaration)):
                                                                                                                     .Block() {
                                                                                                                         .Call $reader.Read();
                                                                                                                         .Default(System.Void)
                                                                                                                     }
                                                                                                             .Default:
-                                                                                                                    .Invoke (.Lambda #Lambda3<System.Action`1[System.String]>)("Unexpected node type")
+                                                                                                                    .Invoke (.Lambda #Lambda3<System.Action`1[System.Xml.XmlNodeType]>)($reader.NodeType)
                                                                                                             }
                                                                                                         } .Else {
                                                                                                             .Break endStateMachineLoop { }
@@ -1230,15 +1231,16 @@
                                                                                                                     $reader.LocalName,
                                                                                                                     $reader.Value)
                                                                                                         }
-                                                                                                .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
                                                                                                 .Case (.Constant<System.Xml.XmlNodeType>(Comment)):
                                                                                                 .Case (.Constant<System.Xml.XmlNodeType>(Text)):
+                                                                                                .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
+                                                                                                .Case (.Constant<System.Xml.XmlNodeType>(XmlDeclaration)):
                                                                                                         .Block() {
                                                                                                             .Call $reader.Read();
                                                                                                             .Default(System.Void)
                                                                                                         }
                                                                                                 .Default:
-                                                                                                        .Invoke (.Lambda #Lambda3<System.Action`1[System.String]>)("Unexpected node type")
+                                                                                                        .Invoke (.Lambda #Lambda3<System.Action`1[System.Xml.XmlNodeType]>)($reader.NodeType)
                                                                                                 }
                                                                                             } .Else {
                                                                                                 .Break endStateMachineLoop { }
@@ -1666,15 +1668,16 @@
                                                 $reader.LocalName,
                                                 $reader.Value)
                                     }
-                            .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
                             .Case (.Constant<System.Xml.XmlNodeType>(Comment)):
                             .Case (.Constant<System.Xml.XmlNodeType>(Text)):
+                            .Case (.Constant<System.Xml.XmlNodeType>(Whitespace)):
+                            .Case (.Constant<System.Xml.XmlNodeType>(XmlDeclaration)):
                                     .Block() {
                                         .Call $reader.Read();
                                         .Default(System.Void)
                                     }
                             .Default:
-                                    .Invoke (.Lambda #Lambda3<System.Action`1[System.String]>)("Unexpected node type")
+                                    .Invoke (.Lambda #Lambda3<System.Action`1[System.Xml.XmlNodeType]>)($reader.NodeType)
                             }
                         } .Else {
                             .Break endStateMachineLoop { }
@@ -1712,8 +1715,8 @@
         $v)
 }
 
-.Lambda #Lambda3<System.Action`1[System.String]>(System.String $m) {
-    .Call Bond.Expressions.ThrowExpression.ThrowInvalidDataException($m)
+.Lambda #Lambda3<System.Action`1[System.Xml.XmlNodeType]>(System.Xml.XmlNodeType $n) {
+    .Call Bond.Expressions.Xml.SimpleXmlParser`1[Bond.Protocols.SimpleXmlReader].UnexpectedNodeError($n)
 }
 
 .Lambda #Lambda4<System.Action`2[System.Collections.Generic.List`1[System.String],System.Int32]>(

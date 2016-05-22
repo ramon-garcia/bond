@@ -1,5 +1,9 @@
 
 
+// suppress "Missing XML comment for publicly visible type or member"
+#pragma warning disable 1591
+
+
 #region ReSharper warnings
 // ReSharper disable PartialTypeWithSinglePart
 // ReSharper disable RedundantNameQualifier
@@ -13,19 +17,24 @@ namespace tests
 {
     using System.Collections.Generic;
 
-    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.3.0.5")]
+    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.4.0.2")]
     public enum EnumType1
     {
-        EnumValue1 = 5,
-        EnumValue2 = 10,
-        EnumValue3 = -10,
-        EnumValue4 = 42,
-        Low = 1,
-        EnumValue5 = -10,
+        EnumValue1 = unchecked((int)5),
+        EnumValue2 = unchecked((int)10),
+        EnumValue3 = unchecked((int)-10),
+        EnumValue4 = unchecked((int)42),
+        Low = unchecked((int)1),
+        EnumValue5 = unchecked((int)-10),
+        EnumValue6 = unchecked((int)4294967286),
+        Int32Min = unchecked((int)-2147483648),
+        Int32Max = unchecked((int)2147483647),
+        UInt32Min = unchecked((int)0),
+        UInt32Max = unchecked((int)4294967295),
     }
 
     [global::Bond.Schema]
-    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.3.0.5")]
+    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.4.0.2")]
     public partial class Foo
     {
         [global::Bond.Id(0)]
@@ -116,12 +125,24 @@ namespace tests
         public EnumType1 m_enum2 { get; set; }
 
         [global::Bond.Id(29)]
-        public EnumType1? m_enum2 { get; set; }
+        public EnumType1? m_enum3 { get; set; }
 
-        [global::Bond.Id(30), global::Bond.Type(typeof(global::Bond.Tag.wstring))]
+        [global::Bond.Id(30)]
+        public EnumType1 m_enum_int32min { get; set; }
+
+        [global::Bond.Id(31)]
+        public EnumType1 m_enum_int32max { get; set; }
+
+        [global::Bond.Id(32)]
+        public EnumType1 m_enum_uint32_min { get; set; }
+
+        [global::Bond.Id(33)]
+        public EnumType1 m_enum_uint32_max { get; set; }
+
+        [global::Bond.Id(34), global::Bond.Type(typeof(global::Bond.Tag.wstring))]
         public string m_wstr_1 { get; set; }
 
-        [global::Bond.Id(31), global::Bond.Type(typeof(global::Bond.Tag.wstring))]
+        [global::Bond.Id(35), global::Bond.Type(typeof(global::Bond.Tag.wstring))]
         public string m_wstr_2 { get; set; }
 
         public Foo()
@@ -147,6 +168,10 @@ namespace tests
             m_float_7 = 0.0F;
             m_enum1 = EnumType1.EnumValue1;
             m_enum2 = EnumType1.EnumValue3;
+            m_enum_int32min = EnumType1.Int32Min;
+            m_enum_int32max = EnumType1.Int32Max;
+            m_enum_uint32_min = EnumType1.UInt32Min;
+            m_enum_uint32_max = EnumType1.UInt32Max;
             m_wstr_1 = "default wstring value";
         }
     }

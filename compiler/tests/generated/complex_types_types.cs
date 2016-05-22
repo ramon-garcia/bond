@@ -1,5 +1,9 @@
 
 
+// suppress "Missing XML comment for publicly visible type or member"
+#pragma warning disable 1591
+
+
 #region ReSharper warnings
 // ReSharper disable PartialTypeWithSinglePart
 // ReSharper disable RedundantNameQualifier
@@ -14,14 +18,14 @@ namespace tests
     using System.Collections.Generic;
 
     [global::Bond.Schema]
-    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.3.0.5")]
+    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.4.0.2")]
     public partial class Foo
     {
         
     }
 
     [global::Bond.Schema]
-    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.3.0.5")]
+    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.4.0.2")]
     public partial class ComplexTypes
     {
         [global::Bond.Id(0)]
@@ -39,10 +43,10 @@ namespace tests
         [global::Bond.Id(4), global::Bond.Type(typeof(Dictionary<string, global::Bond.Tag.wstring>))]
         public Dictionary<string, string> msws { get; set; }
 
-        [global::Bond.Id(5), global::Bond.Type(typeof(global::Bond.Tag.bonded<Foo>))]
+        [global::Bond.Id(5)]
         public global::Bond.IBonded<Foo> bfoo { get; set; }
 
-        [global::Bond.Id(6), global::Bond.Type(typeof(Dictionary<double, LinkedList<List<global::Bond.Tag.nullable<global::Bond.Tag.bonded<Bar>>>>>))]
+        [global::Bond.Id(6), global::Bond.Type(typeof(Dictionary<double, LinkedList<List<global::Bond.Tag.nullable<global::Bond.IBonded<Bar>>>>>))]
         public Dictionary<double, LinkedList<List<global::Bond.IBonded<Bar>>>> m { get; set; }
 
         public ComplexTypes()

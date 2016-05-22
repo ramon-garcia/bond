@@ -102,7 +102,7 @@
 
     before_build:
         - ps: >-
-            if ($env:BOND_BUILD -eq "C#") {
+            if ($env:BOND_BUILD -eq "C#" -Or $env:BOND_BUILD -eq "C++") {
 
                 nuget restore cs\cs.sln
 
@@ -121,6 +121,8 @@
             }
 
             if ($env:BOND_BUILD -eq "C++") {
+
+                msbuild cs\cs.sln /verbosity:minimal /target:Tests\Compat /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
 
                 mkdir build
 
@@ -197,8 +199,6 @@
 
     test_script:
         - ps: >-
-            $ErrorActionPreference = "Stop"
-
             if ($env:BOND_BUILD -eq "Python") {
 
                 ctest -C Debug --tests-regex python_unit_test --output-on-failure
@@ -209,6 +209,10 @@
 
                 nunit-console-x86 /framework:net-4.0 /labels "cs\test\core\bin\debug\net40\${env:BOND_OUTPUT}\Bond.UnitTest.dll" cs\test\internal\bin\debug\net40\Bond.InternalTest.dll
 
+                if (-not $?) { throw "build failed" }
+
                 nunit-console-x86 /framework:net-4.5 /labels "cs\test\core\bin\debug\net45\${env:BOND_OUTPUT}\Bond.UnitTest.dll" cs\test\internal\bin\debug\net45\Bond.InternalTest.dll
 
             }
+
+            if (-not $?) { throw "build failed" }

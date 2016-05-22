@@ -1,5 +1,9 @@
 
 
+// suppress "Missing XML comment for publicly visible type or member"
+#pragma warning disable 1591
+
+
 #region ReSharper warnings
 // ReSharper disable PartialTypeWithSinglePart
 // ReSharper disable RedundantNameQualifier
@@ -14,7 +18,7 @@ namespace test
     using System.Collections.Generic;
 
     [global::Bond.Schema]
-    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.3.0.5")]
+    [System.CodeDom.Compiler.GeneratedCode("gbc", "0.4.0.2")]
     public partial class foo
     {
         [global::Bond.Id(1), global::Bond.Type(typeof(global::Bond.Tag.nullable<long>))]

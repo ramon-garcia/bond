@@ -7,12 +7,11 @@
 Copyright   : (c) Microsoft
 License     : MIT
 Maintainer  : adamsap@microsoft.com
-Stability   : alpha
+Stability   : provisional
 Portability : portable
 
-The module defines types and functions abstracting mapping between Bond types
-and types in the code generation target language. Codegen templates can be used
-with different type name mappings to customize generated code.
+This module defines abstractions for mapping from the Bond type system into the
+type system of a target programming language.
 -}
 
 module Language.Bond.Codegen.TypeMapping
@@ -20,28 +19,40 @@ module Language.Bond.Codegen.TypeMapping
       MappingContext(..)
     , TypeMapping
       -- * Type mappings
+    , idlTypeMapping
     , cppTypeMapping
     , cppCustomAllocTypeMapping
     , csTypeMapping
     , csCollectionInterfacesTypeMapping
+      -- * Alias mapping
+      --
+      -- | <https://microsoft.github.io/bond/manual/compiler.html#type-aliases Type aliases>
+      -- defined in a schema can optionally be mapped to user specified types.
+    , AliasMapping(..)
+    , Fragment(..)
+    , parseAliasMapping
+      -- #namespace-mapping#
+      -- * Namespace mapping
+      --
+      -- | Schema namespaces can be mapped into languange-specific namespaces in the
+      -- generated code.
+    , NamespaceMapping(..)
+    , parseNamespaceMapping
       -- * Name builders
     , getTypeName
     , getInstanceTypeName
     , getAnnotatedTypeName
     , getDeclTypeName
     , getQualifiedName
-    , getGlobalQualifiedName
-    , getIdlQualifiedName
       -- * Helper functions
     , getNamespace
-    , getIdlNamespace
-    , getDeclName
     , getDeclNamespace
     , customAliasMapping
     ) where
 
 import Data.List
 import Data.Monoid
+import Data.Maybe
 import Control.Applicative
 import Control.Monad.Reader
 import Prelude
@@ -53,12 +64,9 @@ import Language.Bond.Syntax.Util
 import Language.Bond.Util
 import Language.Bond.Codegen.CustomMapping
 
--- | The context that determines how a Bond 'Type' maps to a type name in
--- generated code. A context applies to code generation of one or more files in
--- the target language based on the information from a parsed Bond schema
--- definition file. The namespace from the schema definition is stored in the
--- context and all non-qualified names mapped in the context are considered to
--- be defined in that namespace.
+-- | The 'MappingContext' encapsulates information about mapping Bond types
+-- into types in the target language. A context instance is passed to code
+-- generation templates.
 data MappingContext = MappingContext
     { typeMapping :: TypeMapping
     , aliasMapping :: [AliasMapping]
@@ -66,13 +74,12 @@ data MappingContext = MappingContext
     , namespaces :: [Namespace]
     }
 
--- | Opaque type representing type mapping.
+-- | An opaque type representing a type mapping.
 data TypeMapping = TypeMapping
-    { language :: Language
+    { language :: Maybe Language
     , global :: Builder
     , separator :: Builder
     , mapType :: Type -> TypeNameBuilder
-    , mapDeclName :: Declaration -> String
     , fixSyntax :: Builder -> Builder
     , instanceMapping :: TypeMapping
     , elementMapping :: TypeMapping
@@ -82,15 +89,10 @@ data TypeMapping = TypeMapping
 type TypeNameBuilder = Reader MappingContext Builder
 
 -- | Returns the namespace for the 'MappingContext'. The namespace may be
--- different than specified in schema definition file if namespace mapping is
--- in effect.
+-- different than specified in the schema definition file due to
+-- <#namespace-mapping namespace mapping>.
 getNamespace :: MappingContext -> QualifiedName
 getNamespace c@MappingContext {..} = resolveNamespace c namespaces
-
--- | Returns the namespace for the 'MappingContext' as specified in the schema
--- definition file (i.e. ignoring namespace mapping).
-getIdlNamespace :: MappingContext -> QualifiedName
-getIdlNamespace c@MappingContext {..} = findNamespace c namespaces
 
 -- | Returns the namespace for a 'Declaration' in the specified 'MappingContext'.
 getDeclNamespace :: MappingContext -> Declaration -> QualifiedName
@@ -98,25 +100,12 @@ getDeclNamespace c = resolveNamespace c . declNamespaces
 
 -- | Builds a qualified name in the specified 'MappingContext'.
 getQualifiedName :: MappingContext -> QualifiedName -> Builder
-getQualifiedName MappingContext { typeMapping = m } = sepBy (separator m) toText
-
--- | Builds qualified name in schema definition context (i.e. independent of
--- the code generation target language).
-getIdlQualifiedName :: QualifiedName -> Builder
-getIdlQualifiedName = sepBy "." toText
-
--- | Builds a global qualified name in the specified 'MappingContext'.
-getGlobalQualifiedName :: MappingContext -> QualifiedName -> Builder
-getGlobalQualifiedName c@MappingContext { typeMapping = m } = (global m <>) . getQualifiedName c
-
--- | Returns name of the declaration in given mapping context
-getDeclName :: MappingContext -> Declaration -> String
-getDeclName MappingContext {..} = mapDeclName typeMapping
+getQualifiedName MappingContext { typeMapping = m } = (global m <>) . sepBy (separator m) toText
 
 -- | Builds the qualified name for a 'Declaration' in the specified
 -- 'MappingContext'.
 getDeclTypeName :: MappingContext -> Declaration -> Builder
-getDeclTypeName c = getGlobalQualifiedName c . declQualifiedName c
+getDeclTypeName c = getQualifiedName c . declQualifiedName c
 
 -- | Builds the name of a 'Type' in the specified 'MappingContext'.
 getTypeName :: MappingContext -> Type -> Builder
@@ -142,14 +131,25 @@ getAnnotatedTypeName c t = runReader (annotatedTypeName t) c
 customAliasMapping :: MappingContext -> Declaration -> Bool
 customAliasMapping = (maybe False (const True) .) . findAliasMapping
 
+-- | The Bond IDL type name mapping.
+idlTypeMapping :: TypeMapping
+idlTypeMapping = TypeMapping
+    Nothing
+    ""
+    "."
+    idlType
+    id
+    idlTypeMapping
+    idlTypeMapping
+    idlTypeMapping
+
 -- | The default C++ type name mapping.
 cppTypeMapping :: TypeMapping
 cppTypeMapping = TypeMapping
-    Cpp
+    (Just Cpp)
     "::"
     "::"
     cppType
-    declName
     cppSyntaxFix
     cppTypeMapping
     cppTypeMapping
@@ -158,11 +158,10 @@ cppTypeMapping = TypeMapping
 -- | C++ type name mapping using a custom allocator.
 cppCustomAllocTypeMapping :: ToText a => a -> TypeMapping
 cppCustomAllocTypeMapping alloc = TypeMapping
-    Cpp
+    (Just Cpp)
     "::"
     "::"
     (cppTypeCustomAlloc $ toText alloc)
-    declName
     cppSyntaxFix
     (cppCustomAllocTypeMapping alloc)
     (cppCustomAllocTypeMapping alloc)
@@ -171,11 +170,10 @@ cppCustomAllocTypeMapping alloc = TypeMapping
 -- | The default C# type name mapping.
 csTypeMapping :: TypeMapping
 csTypeMapping = TypeMapping
-    Cs
+    (Just Cs)
     "global::"
     "."
     csType
-    declName
     id
     csTypeMapping
     csTypeMapping
@@ -185,11 +183,10 @@ csTypeMapping = TypeMapping
 -- represent collections.
 csCollectionInterfacesTypeMapping :: TypeMapping
 csCollectionInterfacesTypeMapping = TypeMapping
-    Cs
+    (Just Cs)
     "global::"
     "."
     csInterfaceType
-    declName
     id
     csCollectionInstancesTypeMapping
     csCollectionInterfacesTypeMapping
@@ -200,11 +197,10 @@ csCollectionInstancesTypeMapping = csCollectionInterfacesTypeMapping {mapType = 
 
 csAnnotatedTypeMapping :: TypeMapping
 csAnnotatedTypeMapping = TypeMapping
-    Cs
+    (Just Cs)
     "global::"
     "."
     (csTypeAnnotation csType)
-    declName
     id
     csAnnotatedTypeMapping
     csAnnotatedTypeMapping
@@ -251,14 +247,15 @@ annotatedTypeName :: Type -> TypeNameBuilder
 annotatedTypeName = localWith annotatedMapping . typeName
 
 resolveNamespace :: MappingContext -> [Namespace] -> QualifiedName
-resolveNamespace c@MappingContext {..} ns = maybe namespace toNamespace $ find ((namespace ==) . fromNamespace) namespaceMapping
+resolveNamespace MappingContext {..} ns =
+    maybe namespaceName toNamespace $ find ((namespaceName ==) . fromNamespace) namespaceMapping
   where
-    namespace = findNamespace c ns
-
--- last namespace that is language-neutral or matches the language of the context's type mapping
-findNamespace :: MappingContext -> [Namespace] -> QualifiedName
-findNamespace MappingContext {..} ns =
-    nsName . last . filter (maybe True (language typeMapping ==) . nsLanguage) $ ns
+    namespaceName = nsName . fromJust $ mappingNamespace <|> neutralNamespace <|> fallbackNamespace
+    mappingNamespace = find ((language typeMapping ==) . nsLanguage) ns
+    neutralNamespace = find (isNothing . nsLanguage) ns
+    fallbackNamespace = case (language typeMapping) of
+        Nothing -> Just $ last ns
+        Just l  -> error $ "No namespace declared for " ++ show l
 
 declQualifiedName :: MappingContext -> Declaration -> QualifiedName
 declQualifiedName c decl = getDeclNamespace c decl ++ [declName decl]
@@ -272,7 +269,7 @@ declTypeName :: Declaration -> TypeNameBuilder
 declTypeName decl = do
     ctx <- ask
     if namespaces ctx == declNamespaces decl
-            then pureText $ getDeclName ctx decl
+            then pureText $ declName decl
             else declQualifiedTypeName decl
 
 findAliasMapping :: MappingContext -> Declaration -> Maybe AliasMapping
@@ -291,6 +288,36 @@ aliasTypeName a args = do
   where
     fragment (Fragment s) = pureText s
     fragment (Placeholder i) = typeName $ args !! i
+
+-- IDL type mapping
+idlType :: Type -> TypeNameBuilder
+idlType BT_Int8 = pure "int8"
+idlType BT_Int16 = pure "int16"
+idlType BT_Int32 = pure "int32"
+idlType BT_Int64 = pure "int64"
+idlType BT_UInt8 = pure "uint8"
+idlType BT_UInt16 = pure "uint16"
+idlType BT_UInt32 = pure "uint32"
+idlType BT_UInt64 = pure "uint64"
+idlType BT_Float = pure "float"
+idlType BT_Double = pure "double"
+idlType BT_Bool = pure "bool"
+idlType BT_String = pure "string"
+idlType BT_WString = pure "wstring"
+idlType BT_MetaName = pure "bond_meta::name"
+idlType BT_MetaFullName = pure "bond_meta::full_name"
+idlType BT_Blob = pure "blob"
+idlType (BT_IntTypeArg x) = pureText x
+idlType (BT_Maybe type_) = elementTypeName type_
+idlType (BT_List element) = "list<" <>> elementTypeName element <<> ">"
+idlType (BT_Nullable element) = "nullable<" <>> elementTypeName element <<> ">"
+idlType (BT_Vector element) = "vector<" <>> elementTypeName element <<> ">"
+idlType (BT_Set element) = "set<" <>> elementTypeName element <<> ">"
+idlType (BT_Map key value) = "map<" <>> elementTypeName key <<>> ", " <>> elementTypeName value <<> ">"
+idlType (BT_Bonded type_) = "bonded<" <>> elementTypeName type_ <<> ">"
+idlType (BT_TypeParam param) = pureText $ paramName param
+idlType (BT_UserDefined a@Alias {..} args) = aliasTypeName a args
+idlType (BT_UserDefined decl args) = declQualifiedTypeName decl <<>> (angles <$> commaSepTypeNames args)
 
 -- C++ type mapping
 cppType :: Type -> TypeNameBuilder
@@ -400,7 +427,6 @@ csInterfaceType t = csType t
 csTypeAnnotation :: (Type -> TypeNameBuilder) -> Type -> TypeNameBuilder
 csTypeAnnotation _ BT_WString = pure "global::Bond.Tag.wstring"
 csTypeAnnotation _ (BT_Nullable element) = "global::Bond.Tag.nullable<" <>> typeName element <<> ">"
-csTypeAnnotation _ (BT_Bonded type_) = "global::Bond.Tag.bonded<" <>> typeName type_ <<> ">"
 csTypeAnnotation _ (BT_Maybe a@(BT_UserDefined Alias{} _)) = typeName a
 csTypeAnnotation _ (BT_TypeParam (TypeParam _ Nothing)) = pure "global::Bond.Tag.classT"
 csTypeAnnotation _ (BT_TypeParam (TypeParam _ (Just Value))) = pure "global::Bond.Tag.structT"

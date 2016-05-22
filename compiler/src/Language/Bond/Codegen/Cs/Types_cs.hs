@@ -34,12 +34,13 @@ data FieldMapping =
     ReadOnlyProperties      -- ^ auto-properties with private setter
     deriving Eq
 
--- | Codegen template for generating definitions of types representing the schema
+-- | Codegen template for generating definitions of C# types representing the schema.
 types_cs
     :: StructMapping        -- ^ Specifies how to represent schema structs
     -> FieldMapping         -- ^ Specifies how to represent schema fields
     -> MappingContext -> String -> [Import] -> [Declaration] -> (String, Text)
 types_cs structMapping fieldMapping cs _ _ declarations = (fileSuffix, [lt|
+#{CS.disableCscWarnings}
 #{CS.disableReSharperWarnings}
 namespace #{csNamespace}
 {
@@ -49,11 +50,11 @@ namespace #{csNamespace}
 } // #{csNamespace}
 |])
   where
-    idlNamespace = getIdlQualifiedName $ getIdlNamespace cs
+    idl = MappingContext idlTypeMapping [] [] []  
 
     -- C# type
     csType = getTypeName cs
-    csNamespace = getQualifiedName cs $ getNamespace cs
+    csNamespace = sepBy "." toText $ getNamespace cs
 
     access = case structMapping of
         _ -> [lt|public |]
@@ -101,7 +102,7 @@ namespace #{csNamespace}
         constructors = if noCtor then mempty else [lt|
 
         public #{declName}()
-            : this("#{idlNamespace}.#{declName}", "#{declName}")
+            : this("#{getDeclTypeName idl s}", "#{declName}")
         {}
 
         protected #{declName}(string fullName, string name)#{baseCtor}
@@ -139,7 +140,7 @@ namespace #{csNamespace}
     }|]
       where
         -- constant
-        constant Constant {..} = let value x = [lt| = #{x}|] in
+        constant Constant {..} = let value x = [lt| = unchecked((int)#{x})|] in
             [lt|#{constantName}#{optional value constantValue},|]
 
     typeDefinition _ = mempty

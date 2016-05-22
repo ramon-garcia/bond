@@ -7,7 +7,7 @@
 Copyright   : (c) Microsoft
 License     : MIT
 Maintainer  : adamsap@microsoft.com
-Stability   : alpha
+Stability   : provisional
 Portability : portable
 
 This module provides functionality necessary to parse Bond
@@ -24,6 +24,7 @@ module Language.Bond.Parser
 import Data.Ord
 import Data.List
 import Data.Function
+import Data.Word
 import Control.Applicative
 import Control.Monad.Reader
 import Prelude
@@ -41,8 +42,8 @@ data Symbols =
     , imports :: [FilePath]     -- list of imported files
     }
 
-type ImportResolver = 
-    FilePath                    -- ^ path of the file containing the import statement
+type ImportResolver =
+    FilePath                    -- ^ path of the file containing the <https://microsoft.github.io/bond/manual/compiler.html#import-statements import statement>
  -> FilePath                    -- ^ (usually relative) path of the imported file
  -> IO (FilePath, String)       -- ^ the resolver function returns the resolved path of the imported file and its content
 
@@ -58,12 +59,13 @@ data Environment =
 type Parser a = ParsecT String Symbols (ReaderT Environment IO) a
 
 -- | Parses content of a schema definition file.
-parseBond :: 
+parseBond ::
     SourceName                          -- ^ source name, used only for error messages
  -> String                              -- ^ content of a schema file to parse
  -> FilePath                            -- ^ path of the file being parsed, used to resolve relative import paths
  -> ImportResolver                      -- ^ function to resolve and load imported files
- -> IO (Either ParseError Bond)         -- ^ function returns 'Bond' which represents the parsed AST or 'ParserError' if parsing failed
+ -> IO (Either ParseError Bond)         -- ^ function returns 'Bond' which represents the parsed abstract syntax tree 
+                                        --   or 'ParserError' if parsing failed
 parseBond s c f r = runReaderT (runParserT bond (Symbols [] []) s c) (Environment [] [] f r)
 
 -- parser for .bond files
@@ -92,7 +94,7 @@ processImport (Import file) = do
     (path, content) <- liftIO $ resolveImport currentFile file
     Symbols { imports = imports } <- getState
     if path `elem` imports then return () else do
-            modifyState (\u -> u { imports = path:imports } ) 
+            modifyState (\u -> u { imports = path:imports } )
             setInput content
             setPosition $ initialPos path
             void $ local (\e -> e { currentFile = path }) bond
@@ -127,7 +129,7 @@ updateSymbols decl = do
     reconcile _   _ = error "updateSymbols/reconcile: impossible happened."
     paramsMatch = (==) `on` (map paramConstraint . declParams)
     add x xs u = u { symbols = x:xs }
-    duplicateDeclaration left right = 
+    duplicateDeclaration left right =
         (declName left == declName right)
      && not (null $ intersect (declNamespaces left) (declNamespaces right))
 
@@ -151,7 +153,7 @@ findSymbol name = doFind <?> "qualified name"
         nsName ns1 == nsName ns2 && (lang1 == lang2 || lang1 == Nothing || lang2 == Nothing)
       where
         lang1 = nsLanguage ns1
-        lang2 = nsLanguage ns2 
+        lang2 = nsLanguage ns2
 
 findStruct :: QualifiedName -> Parser Declaration
 findStruct name = doFind <?> "qualified struct name"
@@ -173,7 +175,7 @@ namespace = Namespace <$ keyword "namespace" <*> language <*> qualifiedName <* o
 
 -- identifier optionally qualified with namespace
 qualifiedName :: Parser QualifiedName
-qualifiedName = sepBy1 identifier (char '.') <?> "qualified name"
+qualifiedName = sepBy1 namespaceIdentifier (char '.') <?> "qualified name"
 
 -- type parameters
 parameters :: Parser [TypeParam]
@@ -232,12 +234,12 @@ struct = do
     with params e = e { currentParams = params }
     unique p = do
         fields' <- p
-        case findDuplicates fields' of
+        case findDuplicatesBy fieldOrdinal fields' ++ findDuplicatesBy fieldName fields' of
             [] -> return fields'
-            Field {..}:_ -> fail $ "Duplicate definition of the field with ordinal " ++ show fieldOrdinal
+            Field {..}:_ -> fail $ "Duplicate definition of the field with ordinal " ++ show fieldOrdinal ++
+                " and name " ++ show fieldName
       where
-        findDuplicates xs = deleteFirstsBy ordinal xs (nubBy ordinal xs)
-        ordinal = (==) `on` fieldOrdinal
+        findDuplicatesBy accessor xs = deleteFirstsBy ((==) `on` accessor) xs (nubBy ((==) `on` accessor) xs)
 
 manySortedBy :: (a -> a -> Ordering) -> ParsecT s u m a -> ParsecT s u m [a]
 manySortedBy = manyAccum . insertBy
@@ -246,7 +248,13 @@ manySortedBy = manyAccum . insertBy
 field :: Parser Field
 field = makeField <$> attributes <*> ordinal <*> modifier <*> ftype <*> identifier <*> optional default_
   where
-    ordinal = (fromIntegral <$> integer) <* colon <?> "field ordinal"
+    ordinal = word16 <* colon <?> "field ordinal"
+      where
+        word16 = do
+            i <- integer
+            if i <= toInteger (maxBound :: Word16) && i >= toInteger (minBound :: Word16)
+                then return (fromInteger i)
+                else fail "Field ordinal must be within the range 0-65535"
     modifier = option Optional
                     (keyword "optional" *> pure Optional
                  <|> keyword "required" *> pure Required

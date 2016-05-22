@@ -36,7 +36,7 @@
  ""_uint32"": 117,
  ""_uint64"": 1117,
  ""_bool"": true,
- ""_float"": 5.40,
+ ""_float"": 5,
  ""_double"": -89.14,
  ""_enum1"" : 10,
  ""dt"" : 123456
@@ -58,7 +58,7 @@
 
             // JsonReader reads the input as double.
             // casting from double to float leads to floating-point in accuracy.
-            Assert.IsTrue(Math.Abs(target._float - 5.4) < 0.000001);
+            Assert.IsTrue(Math.Abs(target._float - 5) < 0.000001);
             
             Assert.AreEqual(-89.14, target._double);
             Assert.AreEqual(EnumType1.EnumValue2, target._enum1);
@@ -696,7 +696,7 @@ World", target._str);
             Assert.AreEqual("2015-02-26T13:18:13.1521765-08:00", target.value);
         }
 
-        private static T ParseJson<T>(string json) where T : new()
+        static T ParseJson<T>(string json) where T : new()
         {
             var deserializer = new Deserializer<SimpleJsonReader>(typeof(T));
             var reader = new SimpleJsonReader(new StringReader(json));

@@ -354,6 +354,11 @@ namespace Bond
 
         static Type GetBaseType(this Type type)
         {
+            if (type.IsInterface())
+            {
+                throw new ArgumentException("GetBaseType cannot be called on an interface, as there may be multiple base interfaces", "type");
+            }
+
             return type.GetTypeInfo().BaseType;
         }
 
@@ -362,7 +367,7 @@ namespace Bond
             return type.GetTypeInfo().IsAssignableFrom(that.GetTypeInfo());
         }
 
-        internal static MethodInfo GetMethod(this Type type, string name, params Type[] paramTypes)
+        internal static MethodInfo FindMethod(this Type type, string name, params Type[] paramTypes)
         {
             var methods = type.GetDeclaredMethods(name);
 
@@ -375,15 +380,32 @@ namespace Bond
             
             if (result == null)
             {
-                var baseType = type.GetBaseType();
-                if (baseType != null)
-                    result = baseType.GetMethod(name, paramTypes);
+                if (type.IsInterface())
+                {
+                    var interfaces = type.GetInterfaces();
+                    var matchedMethods = interfaces.Select(x => x.FindMethod(name, paramTypes)).Where(x => x != null).ToList();
+
+                    if (matchedMethods.Count > 1)
+                    {
+                        throw new AmbiguousMatchException("FindMethod found more than one matching method");
+                    }
+                    else
+                    {
+                        result = matchedMethods.FirstOrDefault();
+                    }
+                }
+                else
+                {
+                    var baseType = type.GetBaseType();
+                    if (baseType != null)
+                        result = baseType.FindMethod(name, paramTypes);
+                }
             }
 
             return result;
         }
 
-        internal static MethodInfo FindMethod(this Type type, string name, params Type[] argumentTypes)
+        internal static MethodInfo ResolveMethod(this Type type, string name, params Type[] argumentTypes)
         {
             var methods = type.GetDeclaredMethods(name);
             var typeArgs = new Type[0];
@@ -421,7 +443,7 @@ namespace Bond
 
         internal static MethodInfo GetMethod(this Type type, Type declaringType, string name, params Type[] paramTypes)
         {
-            return declaringType.MakeGenericTypeFrom(type).GetMethod(name, paramTypes);
+            return declaringType.MakeGenericTypeFrom(type).FindMethod(name, paramTypes);
         }
 
         internal static ConstructorInfo GetConstructor(this Type type, params Type[] paramTypes)
@@ -432,6 +454,7 @@ namespace Bond
                 from method in methods
                 let parameters = method.GetParameters()
                 where parameters != null
+                where method.IsStatic == false
                 where parameters.Select(p => p.ParameterType).SequenceEqual(paramTypes)
                 select method).FirstOrDefault();
         }

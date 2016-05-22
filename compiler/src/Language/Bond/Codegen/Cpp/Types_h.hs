@@ -28,7 +28,7 @@ import qualified Language.Bond.Codegen.Cpp.Util as CPP
 -- of C++ types representing the schema. 
 types_h :: [String]     -- ^ list of optional header files to be @#include@'ed by the generated code
         -> Bool         -- ^ 'True' to generate enum definitions into a separate file /base_name/_enum.h
-        -> Maybe String -- ^ optional custom allocator to be used by the generated code
+        -> Maybe String -- ^ optional custom allocator to be used in the generated code
         -> MappingContext -> String -> [Import] -> [Declaration] -> (String, L.Text)
 types_h userHeaders enumHeader allocator cpp file imports declarations = ("_types.h", [lt|
 #pragma once
@@ -58,7 +58,8 @@ types_h userHeaders enumHeader allocator cpp file imports declarations = ("_type
   where
     hexVersion (Version xs _) = foldr showHex "" xs
     cppType = getTypeName cpp
-    idlNamespace = getIdlQualifiedName $ getIdlNamespace cpp
+
+    idl = MappingContext idlTypeMapping [] [] []  
 
     cppDefaultValue = CPP.defaultValue cpp
 
@@ -74,10 +75,9 @@ types_h userHeaders enumHeader allocator cpp file imports declarations = ("_type
     -- True if declarations have any type satisfying f
     have f = getAny $ F.foldMap g declarations
       where
-        g s@Struct{..} = foldMapStructFields (foldMapType f . fieldType) s
-                      <> optional (foldMapType f) structBase
-        g Alias{..} = foldMapType f aliasType
-        g _ = Any False
+        g Struct{..} = F.foldMap (foldMapType f . fieldType) structFields
+                    <> optional (foldMapType f) structBase
+        g _ = mempty
 
     anyBonded (BT_Bonded _) = Any True
     anyBonded _ = Any False
@@ -198,7 +198,7 @@ namespace std
         -- constructor body
         ctorBody = if hasMetaFields then [lt|
         {
-            InitMetadata("#{declName}", "#{idlNamespace}.#{declName}");
+            InitMetadata("#{declName}", "#{getDeclTypeName idl s}");
         }|]
             else [lt|
         {
@@ -242,7 +242,7 @@ namespace std
             keyType (BT_Map key _) = cppType key
             keyType (BT_UserDefined a@Alias {} args) = keyType $ resolveAlias a args
             keyType _ = error "allocatorCtor/keyType: impossible happened."
-            allocParameterized = L.isInfixOf (L.pack alloc) . toLazyText . cppType
+            allocParameterized t = (isStruct t) || (L.isInfixOf (L.pack alloc) . toLazyText $ cppType t)
 
         -- copy constructor
         copyCtor = if hasMetaFields then define else implicitlyDeclared
@@ -325,7 +325,7 @@ namespace std
         inline
         const char* GetTypeName(enum #{declName}, const bond::qualified_name_tag&)
         {
-            return "#{idlNamespace}.#{declName}";
+            return "#{getDeclTypeName idl e}";
         }
 
         inline

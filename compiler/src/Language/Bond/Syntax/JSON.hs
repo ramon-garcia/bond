@@ -1,35 +1,34 @@
 -- Copyright (c) Microsoft. All rights reserved.
 -- Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-{-# LANGUAGE OverloadedStrings, RecordWildCards, DeriveGeneric,
-    StandaloneDeriving #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-|
 Copyright   : (c) Microsoft
 License     : MIT
 Maintainer  : adamsap@microsoft.com
-Stability   : alpha
+Stability   : provisional
 Portability : portable
 -}
 
-module Language.Bond.Syntax.JSON 
+module Language.Bond.Syntax.JSON
     ( -- * FromJSON and ToJSON instances
-      -- $aeson 
+      -- $aeson
     )
     where
 
 import Data.Aeson
 import Data.Aeson.Types
+import Data.Aeson.TH
 import Control.Applicative
 import Prelude
-import GHC.Generics (Generic)
 import Language.Bond.Syntax.Types
 
 -- $aeson
 --
 -- This module defines 'FromJSON' and 'ToJSON' instances for Bond abstract
--- syntax tree.  They allow using the <http://hackage.haskell.org/package/aeson aeson> 
+-- syntax tree.  They allow using the <http://hackage.haskell.org/package/aeson aeson>
 -- library to encode Bond AST types to <https://microsoft.github.io/bond/manual/compiler.html#schema-ast JSON format>:
 --
 -- > > encode (Bond [] [Namespace Nothing ["example"]] [])
@@ -39,10 +38,6 @@ import Language.Bond.Syntax.Types
 --
 -- > > decode "{\"namespaces\":[{\"name\":[\"example\"]}],\"imports\":[],\"declarations\":[]}" :: Maybe Bond
 -- > Just (Bond {bondImports = [], bondNamespaces = [Namespace {nsLanguage = Nothing, nsName = ["example"]}], bondDeclarations = []})
-
-deriving instance Generic Modifier
-instance FromJSON Modifier
-instance ToJSON Modifier
 
 instance FromJSON Type where
     parseJSON (String "int8") = pure BT_Int8
@@ -199,17 +194,27 @@ instance ToJSON Default where
         [ "type" .= String "nothing"
         ]
 
-deriving instance Generic Attribute
-instance FromJSON Attribute
-instance ToJSON Attribute
+instance FromJSON Field where
+    parseJSON (Object o) = Field <$>
+        o .:? "fieldAttributes" .!= [] <*>
+        o .:  "fieldOrdinal" <*>
+        o .:? "fieldModifier" .!= Optional <*>
+        o .:  "fieldType" <*>
+        o .:  "fieldName" <*>
+        o .:? "fieldDefault" .!= Nothing
+    parseJSON x = modifyFailure
+                    (const $ "Expected a representation of Field but found: " ++ show x)
+                    empty
 
-deriving instance Generic Field
-instance FromJSON Field
-instance ToJSON Field
-
-deriving instance Generic Constant
-instance FromJSON Constant
-instance ToJSON Constant
+instance ToJSON Field where
+    toJSON f = object
+        [ "fieldAttributes" .= fieldAttributes f
+        , "fieldOrdinal" .= fieldOrdinal f
+        , "fieldModifier" .= fieldModifier f
+        , "fieldType" .= fieldType f 
+        , "fieldName" .= fieldName f
+        , "fieldDefault" .= fieldDefault f
+        ]
 
 instance FromJSON Constraint where
     parseJSON (String "value") = pure Value
@@ -219,22 +224,6 @@ instance FromJSON Constraint where
 
 instance ToJSON Constraint where
     toJSON Value = "value"
-
-deriving instance Generic TypeParam
-instance FromJSON TypeParam
-instance ToJSON TypeParam
-
-deriving instance Generic Declaration
-instance FromJSON Declaration
-instance ToJSON Declaration
-
-deriving instance Generic Import
-instance FromJSON Import
-instance ToJSON Import
-
-deriving instance Generic Language
-instance FromJSON Language
-instance ToJSON Language
 
 instance FromJSON Namespace where
     parseJSON (Object v) =
@@ -270,4 +259,12 @@ instance ToJSON Bond where
         , "namespaces" .= bondNamespaces
         , "declarations" .= bondDeclarations
         ]
+
+$(deriveJSON defaultOptions ''Modifier)
+$(deriveJSON defaultOptions ''Attribute)
+$(deriveJSON defaultOptions ''Constant)
+$(deriveJSON defaultOptions ''TypeParam)
+$(deriveJSON defaultOptions ''Declaration)
+$(deriveJSON defaultOptions ''Import)
+$(deriveJSON defaultOptions ''Language)
 

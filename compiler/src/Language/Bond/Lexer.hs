@@ -16,6 +16,7 @@ module Language.Bond.Lexer
     , equal
     , float
     , identifier
+    , namespaceIdentifier
     , integer
     , keyword
     , lexeme
@@ -35,7 +36,7 @@ module Language.Bond.Lexer
     , whiteSpace
     ) where
 
-
+import Data.List
 import Control.Monad (void)
 import Text.Megaparsec
 import Text.Megaparsec.Expr
@@ -107,18 +108,30 @@ colon = symbol ":"
 comma = symbol ","
 commaSep1 p    = sepBy1 p comma
 decimal = lexeme P.decimal
-identifier :: Parser String
-identifier = lexeme (p >>= check)
+makeIdentifier :: [String]->Parser String
+makeIdentifier theReservedNames = lexeme (p >>= check)
   where
     p       = (:) <$> letterChar <*> many alphaNumChar
-    check x = if x `elem` reservedNames
+    check x = if x `elem` theReservedNames
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
+identifier :: Parser String
+identifier = makeIdentifier reservedNames
+namespaceIdentifier :: Parser String
+namespaceIdentifier = makeIdentifier (delete "Schema" reservedNames )
+
+--identifier :: Parser String
+--identifier = lexeme (p >>= check)
+--  where
+--    p       = (:) <$> letterChar <*> many alphaNumChar
+--    check x = if x `elem` reservedNames
+--                then fail $ "keyword " ++ show x ++ " cannot be an identifier"
+--                else return x
+
 natural = lexeme P.integer
 integer = P.signed whiteSpace (lexeme P.integer)
 keyword::String -> Parser ()
 keyword w = string w *> notFollowedBy alphaNumChar *> whiteSpace
--- natural = lexeme P.natural
 parens = between (symbol "(") (symbol ")")
 semi = symbol ";"
 semiSep p   = sepBy p semi

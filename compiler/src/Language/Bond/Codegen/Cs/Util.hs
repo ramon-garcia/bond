@@ -9,6 +9,7 @@ module Language.Bond.Codegen.Cs.Util
     , schemaAttributes
     , paramConstraints
     , defaultValue
+    , disableCscWarnings
     , disableReSharperWarnings
     ) where
 
@@ -23,6 +24,12 @@ import Language.Bond.Syntax.Types
 import Language.Bond.Syntax.Util
 import Language.Bond.Codegen.TypeMapping
 import Language.Bond.Codegen.Util
+
+disableCscWarnings :: Text
+disableCscWarnings = [lt|
+// suppress "Missing XML comment for publicly visible type or member"
+#pragma warning disable 1591
+|]
 
 disableReSharperWarnings :: Text
 disableReSharperWarnings = [lt|
@@ -72,14 +79,17 @@ generatedCodeAttr :: Text
 generatedCodeAttr = [lt|[System.CodeDom.Compiler.GeneratedCode("gbc", "#{showVersion version}")]
     |]
 
+idl :: MappingContext
+idl = MappingContext idlTypeMapping [] [] []  
+
 optionalTypeAttributes :: MappingContext -> Declaration -> Text
 optionalTypeAttributes cs decl =
     schemaAttributes 1 (declAttributes decl)
  <> namespaceAttribute
   where
-    namespaceAttribute = if getIdlNamespace cs == getNamespace cs
+    namespaceAttribute = if getDeclNamespace idl decl == getDeclNamespace cs decl
         then mempty
-        else [lt|[global::Bond.Namespace("#{getIdlQualifiedName $ getIdlNamespace cs}")]
+        else [lt|[global::Bond.Namespace("#{getQualifiedName idl $ getDeclNamespace idl decl}")]
     |]
 
 -- Attributes defined by the user in the schema
@@ -87,7 +97,7 @@ schemaAttributes :: Int64 -> [Attribute] -> Text
 schemaAttributes indent = newlineSepEnd indent schemaAttribute
   where
     schemaAttribute Attribute {..} =
-        [lt|[global::Bond.Attribute("#{getIdlQualifiedName attrName}", "#{attrValue}")]|]
+        [lt|[global::Bond.Attribute("#{getQualifiedName idl attrName}", "#{attrValue}")]|]
 
 -- generic type parameter constraints
 paramConstraints :: [TypeParam] -> Text
