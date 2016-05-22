@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 
 module Language.Bond.Lexer
-    ( angles
+    (  angles
     , braces
     , brackets
     , colon
@@ -35,24 +35,17 @@ module Language.Bond.Lexer
     , whiteSpace
     ) where
 
-import Control.Monad.Reader
-import Text.ParserCombinators.Parsec
-import qualified Text.Parsec.Token as P
 
-type LanguageDef st env = P.GenLanguageDef String st (ReaderT env IO)
+import Control.Monad (void)
+import Text.Megaparsec
+import Text.Megaparsec.Expr
+import Text.Megaparsec.Text
+--import Text.ParserCombinators.Parsec
+import qualified Text.Megaparsec.Lexer as P
+import Data.Char ( isAlpha, toLower, toUpper, isSpace, digitToInt )
 
-bondIdl :: LanguageDef st env
-bondIdl = P.LanguageDef
-    { P.commentStart    = "/*"
-    , P.commentEnd      = "*/"
-    , P.commentLine     = "//"
-    , P.nestedComments  = True
-    , P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> char '_'
-    , P.opStart         = mzero
-    , P.opLetter        = mzero
-    , P.reservedNames   =
-            [ "blob"
+reservedNames::[String]
+reservedNames = ["blob"
             , "bond_meta"
             , "bonded"
             , "bool"
@@ -91,32 +84,48 @@ bondIdl = P.LanguageDef
             , "void"
             , "wstring"
             ]
-    , P.reservedOpNames = []
-    , P.caseSensitive   = True
-    }
 
-lexer       = P.makeTokenParser bondIdl
 
-angles      = P.angles lexer
-braces      = P.braces lexer
-brackets    = P.brackets lexer
-colon       = P.colon lexer
-comma       = P.comma lexer
-commaSep1   = P.commaSep1 lexer
-decimal     = P.decimal lexer
-identifier  = P.identifier lexer
-integer     = P.integer lexer
-keyword     = P.reserved lexer
-lexeme      = P.lexeme lexer
-natural     = P.natural lexer
-parens      = P.parens lexer
-semi        = P.semi lexer
-semiSep     = P.semiSep lexer
-symbol      = P.symbol lexer
-whiteSpace  = P.whiteSpace lexer
 
-equal       = symbol "="
+simpleSpace =
+        skipSome (satisfy isSpace)
+
+whiteSpace::Parser ()
+whiteSpace = P.space (void simpleSpace) lineComment blockComment
+        where lineComment = P.skipLineComment "//"
+              blockComment = P.skipBlockComment  "/*" "*/"
+
+lexeme  = P.lexeme whiteSpace
+
+symbol :: String -> Parser String
+symbol = P.symbol whiteSpace
+
+angles = between (symbol "<") (symbol ">")
+braces = between (symbol "{") (symbol "}")
+brackets = between (symbol "[") (symbol "]")
+colon = symbol ":"
+comma = symbol ","
+commaSep1 p    = sepBy1 p comma
+decimal = lexeme P.decimal
+identifier :: Parser String
+identifier = lexeme (p >>= check)
+  where
+    p       = (:) <$> letterChar <*> many alphaNumChar
+    check x = if x `elem` reservedNames
+                then fail $ "keyword " ++ show x ++ " cannot be an identifier"
+                else return x
+natural = lexeme P.integer
+integer = P.signed whiteSpace (lexeme P.integer)
+keyword::String -> Parser ()
+keyword w = string w *> notFollowedBy alphaNumChar *> whiteSpace
+-- natural = lexeme P.natural
+parens = between (symbol "(") (symbol ")")
+semi = symbol ";"
+semiSep p   = sepBy p semi
+equal = symbol "="
+
 semiEnd p   = endBy p semi
+
 commaEnd p  = endBy p comma
 commaEnd1 p = endBy1 p comma
 
@@ -131,18 +140,9 @@ semiOrCommaSepEnd1 p = sepEndBy1 p semiOrComma
 quote = symbol "\""
 quotes = between quote quote
 
-stringLiteral = P.stringLiteral lexer
+
+stringLiteral :: Parser String
+stringLiteral = char '"' >> manyTill P.charLiteral (char '"')
 
 unescapedStringLiteral = quotes $ many $ satisfy (/= '"')
-
--- Can't use float from Text.Parsec.Token because it doesn't handle numbers
--- starting with +/- sign.
-float = do
-    s <- sign
-    f <- P.float lexer
-    return $ s f
-  where
-    sign = (char '-' >> return negate)
-       <|> (char '+' >> return id)
-       <|> return id
-
+float = P.signed whiteSpace (lexeme P.float)

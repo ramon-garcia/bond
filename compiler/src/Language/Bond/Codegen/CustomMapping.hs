@@ -28,7 +28,7 @@ module Language.Bond.Codegen.CustomMapping
 import Data.Char
 import Control.Applicative
 import Prelude
-import Text.Parsec hiding (many, optional, (<|>))
+import Text.Megaparsec hiding (many, optional, (<|>))
 import Language.Bond.Syntax.Types
 
 -- | Specification of a fragment used in type alias mappings.

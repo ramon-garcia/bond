@@ -41,7 +41,7 @@ library
                     filepath >= 1.0,
                     ghc-prim,
                     mtl >= 2.1,
-                    parsec >= 3.1,
+                    megaparsec >= 5.0,
                     shakespeare >= 2.0,
                     text >= 0.11
   ghc-options:      -Wall

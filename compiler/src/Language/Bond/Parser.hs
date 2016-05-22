@@ -27,8 +27,8 @@ import Data.Function
 import Control.Applicative
 import Control.Monad.Reader
 import Prelude
-import Text.Parsec.Pos (initialPos)
-import Text.Parsec hiding (many, optional, (<|>))
+import Text.Megaparsec.Pos (initialPos)
+import Text.Megaparsec hiding (many, optional, (<|>))
 import Language.Bond.Lexer
 import Language.Bond.Syntax.Types
 import Language.Bond.Syntax.Util
