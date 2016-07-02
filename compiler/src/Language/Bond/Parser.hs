@@ -27,8 +27,10 @@ import Data.Function
 import Data.Word
 import Control.Applicative
 import Control.Monad.Reader
+import Control.Monad.State
 import Prelude
 import Text.Megaparsec.Pos (initialPos)
+--import Text.Megaparsec.Prim (manyAcc)
 import Text.Megaparsec hiding (many, optional, (<|>))
 import Language.Bond.Lexer
 import Language.Bond.Syntax.Types
@@ -56,7 +58,10 @@ data Environment =
     , resolveImport :: ImportResolver   -- imports resolver
     }
 
-type Parser a = ParsecT String Symbols (ReaderT Environment IO) a
+type Parser a = ParsecT Dec String (StateT Symbols (ReaderT Environment IO)) a
+
+type SourceName = String
+
 
 -- | Parses content of a schema definition file.
 parseBond ::
@@ -64,23 +69,26 @@ parseBond ::
  -> String                              -- ^ content of a schema file to parse
  -> FilePath                            -- ^ path of the file being parsed, used to resolve relative import paths
  -> ImportResolver                      -- ^ function to resolve and load imported files
- -> IO (Either ParseError Bond)         -- ^ function returns 'Bond' which represents the parsed abstract syntax tree 
+ -> IO (Either (ParseError (Token String) Dec) Bond)         -- ^ function returns 'Bond' which represents the parsed abstract syntax tree 
                                         --   or 'ParserError' if parsing failed
-parseBond s c f r = runReaderT (runParserT bond (Symbols [] []) s c) (Environment [] [] f r)
+									
+parseBond s c f r = runReaderT (evalStateT (runParserT bond s c) (Symbols [] [])) (Environment [] [] f r)
 
+
+-- (Symbols [] [])
 -- parser for .bond files
 bond :: Parser Bond
 bond = do
     whiteSpace
     imports <- many import_
-    namespaces <- many1 namespace
+    namespaces <- some namespace
     local (with namespaces) $ Bond imports namespaces <$> many declaration <* eof
   where
     with namespaces e = e { currentNamespaces = namespaces }
 
 import_ :: Parser Import
 import_ = do
-    i <- Import <$ keyword "import" <*> unescapedStringLiteral <?> "import statement"
+    i <-  Import <$ keyword "import" <*> unescapedStringLiteral <?> "import statement"
     input <- getInput
     pos <- getPosition
     processImport i
@@ -92,9 +100,9 @@ processImport :: Import -> Parser()
 processImport (Import file) = do
     Environment { currentFile = currentFile, resolveImport = resolveImport } <- ask
     (path, content) <- liftIO $ resolveImport currentFile file
-    Symbols { imports = imports } <- getState
+    Symbols { imports = imports } <- get
     if path `elem` imports then return () else do
-            modifyState (\u -> u { imports = path:imports } )
+            modify (\u -> u { imports = path:imports } )
             setInput content
             setPosition $ initialPos path
             void $ local (\e -> e { currentFile = path }) bond
@@ -112,10 +120,10 @@ declaration = do
 
 updateSymbols :: Declaration -> Parser ()
 updateSymbols decl = do
-    (previous, symbols) <- partition (duplicateDeclaration decl) <$> symbols <$> getState
+    (previous, symbols) <- partition (duplicateDeclaration decl) <$> symbols <$> get
     case reconcile previous decl of
         (False, _) -> fail $ "The " ++ showPretty decl ++ " has been previously defined as " ++ showPretty (head previous)
-        (True, f) -> modifyState (f symbols)
+        (True, f) -> modify (f symbols)
   where
     reconcile [x@Forward {}] y@Struct {} = (paramsMatch x y, add y)
     reconcile [x@Forward {}] y@Forward {} = (paramsMatch x y, const id)
@@ -139,7 +147,7 @@ findSymbol name = doFind <?> "qualified name"
   where
     doFind = do
         namespaces <- asks currentNamespaces
-        Symbols { symbols = symbols } <- getState
+        Symbols { symbols = symbols } <- get
         case find (delcMatching namespaces name) symbols of
             Just decl -> return decl
             Nothing -> fail $ "Unknown symbol: " ++ showQualifiedName name
@@ -179,7 +187,7 @@ qualifiedName = sepBy1 namespaceIdentifier (char '.') <?> "qualified name"
 
 -- type parameters
 parameters :: Parser [TypeParam]
-parameters = option [] (angles $ commaSep1 param) <?> "type parameters"
+parameters = option [] (angles $ commaSep1 param) <?> "type parameters" 
   where
     param = TypeParam <$> identifier <*> constraint
     constraint = optional (colon *> keyword "value" *> pure Value)
@@ -212,7 +220,7 @@ view = do
     attr <- attributes
     name <- keyword "struct" *> identifier
     decl <- keyword "view_of" *> qualifiedName >>= findStruct
-    fields <- braces $ semiOrCommaSepEnd1 identifier
+    fields <- braces $ semiOrCommaSepEnd1 identifier 
     namespaces <- asks currentNamespaces
     Struct namespaces attr name (declParams decl) (structBase decl) (viewFields decl fields) <$ optional semi
   where
@@ -241,8 +249,8 @@ struct = do
       where
         findDuplicatesBy accessor xs = deleteFirstsBy ((==) `on` accessor) xs (nubBy ((==) `on` accessor) xs)
 
-manySortedBy :: (a -> a -> Ordering) -> ParsecT s u m a -> ParsecT s u m [a]
-manySortedBy = manyAccum . insertBy
+manySortedBy::(Alternative m) => (a -> a -> Ordering) -> m a -> m [a]
+manySortedBy order ma = sortBy order <$> many ma
 
 -- field definition parser
 field :: Parser Field
@@ -312,7 +320,7 @@ complexType =
     userStruct = try (checkUserType validBondedType) <?> "user defined struct"
     checkUserType valid = do
         t <- userType
-        if valid t then return t else unexpected "type"
+        if valid t then return t else fail "type" -- maybe we should use something else instead of fail
     validKeyType t = case t of
         BT_TypeParam _ -> True
         _ -> isScalar t || isString t

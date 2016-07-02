@@ -2,6 +2,7 @@
 -- Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Bond.Lexer
     (  angles
@@ -38,12 +39,15 @@ module Language.Bond.Lexer
 
 import Data.List
 import Control.Monad (void)
+import Control.Monad.State
+import Control.Monad.Reader
 import Text.Megaparsec
 import Text.Megaparsec.Expr
-import Text.Megaparsec.Text
 --import Text.ParserCombinators.Parsec
 import qualified Text.Megaparsec.Lexer as P
 import Data.Char ( isAlpha, toLower, toUpper, isSpace, digitToInt )
+
+type Parser a = forall m. ParsecT Dec String m a
 
 reservedNames::[String]
 reservedNames = ["blob"
@@ -88,6 +92,7 @@ reservedNames = ["blob"
 
 
 
+simpleSpace::Parser()
 simpleSpace =
         skipSome (satisfy isSpace)
 

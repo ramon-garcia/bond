@@ -17,7 +17,7 @@ import Data.Char
 import Control.Applicative
 import Prelude
 import Text.Megaparsec hiding (many, optional, (<|>))
-import Text.Megaparsec.Error (Dec)
+import Text.Megaparsec.String
 import Language.Bond.Syntax.Types
 
 -- | Specification of a fragment of type alias mappings.
@@ -36,8 +36,6 @@ data NamespaceMapping = NamespaceMapping
     { fromNamespace :: QualifiedName    -- ^ schema namespace
     , toNamespace :: QualifiedName      -- ^ namespace in the generated code
     }
-
-type Parser = Parsec Dec String
 
 whitespace :: Parser String
 whitespace = many (char ' ') <?> "whitespace"
