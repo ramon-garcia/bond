@@ -31,7 +31,8 @@ import Control.Monad.State
 import Prelude
 import Text.Megaparsec.Pos (initialPos)
 --import Text.Megaparsec.Prim (manyAcc)
-import Text.Megaparsec hiding (many, optional, (<|>))
+--import Text.Megaparsec hiding (many, optional, (<|>))
+import Text.Megaparsec
 import Language.Bond.Lexer
 import Language.Bond.Syntax.Types
 import Language.Bond.Syntax.Util
@@ -71,7 +72,7 @@ parseBond ::
  -> ImportResolver                      -- ^ function to resolve and load imported files
  -> IO (Either (ParseError (Token String) Dec) Bond)         -- ^ function returns 'Bond' which represents the parsed abstract syntax tree 
                                         --   or 'ParserError' if parsing failed
-									
+
 parseBond s c f r = runReaderT (evalStateT (runParserT bond s c) (Symbols [] [])) (Environment [] [] f r)
 
 
@@ -265,8 +266,8 @@ field = makeField <$> attributes <*> ordinal <*> modifier <*> ftype <*> identifi
                 else fail "Field ordinal must be within the range 0-65535"
     modifier = option Optional
                     (keyword "optional" *> pure Optional
-                 <|> keyword "required" *> pure Required
-                 <|> keyword "required_optional" *> pure RequiredOptional)
+                 <|> keyword "required_optional" *> pure RequiredOptional
+                 <|> keyword "required" *> pure Required)
     default_ = equal *>
                     (keyword "true" *> pure (DefaultBool True)
                  <|> keyword "false" *> pure (DefaultBool False)

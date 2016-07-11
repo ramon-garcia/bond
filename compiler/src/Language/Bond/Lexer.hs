@@ -45,7 +45,7 @@ import Text.Megaparsec
 import Text.Megaparsec.Expr
 --import Text.ParserCombinators.Parsec
 import qualified Text.Megaparsec.Lexer as P
-import Data.Char ( isAlpha, toLower, toUpper, isSpace, digitToInt )
+import Data.Char ( isAlpha, isAlphaNum, toLower, toUpper, isSpace, digitToInt )
 
 type Parser a = forall m. ParsecT Dec String m a
 
@@ -113,10 +113,24 @@ colon = symbol ":"
 comma = symbol ","
 commaSep1 p    = sepBy1 p comma
 decimal = lexeme P.decimal
+
+isIdentCharFirst :: Char->Bool
+isIdentCharFirst c = isAlpha c || (c == '_')
+
+identFirstChar :: Parser Char
+identFirstChar = satisfy isIdentCharFirst <?> "initial identifier character"
+
+isIdentChar :: Char->Bool
+isIdentChar c = isAlphaNum c || (c == '_')
+
+identChar :: Parser Char
+identChar = satisfy isIdentChar <?> "identifier character"
+
+
 makeIdentifier :: [String]->Parser String
 makeIdentifier theReservedNames = lexeme (p >>= check)
   where
-    p       = (:) <$> letterChar <*> many alphaNumChar
+    p       = (:) <$> identFirstChar <*> many identChar
     check x = if x `elem` theReservedNames
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
@@ -133,8 +147,8 @@ namespaceIdentifier = makeIdentifier (delete "Schema" reservedNames )
 --                then fail $ "keyword " ++ show x ++ " cannot be an identifier"
 --                else return x
 
-natural = lexeme P.integer
-integer = P.signed whiteSpace (lexeme P.integer)
+natural = lexeme (( char '0' *>  (( char 'x' *> P.hexadecimal ) <|>  ( char 'o' *> P.octal ) <|> P.integer <|> return 0 )) <|> P.integer )
+integer = P.signed whiteSpace natural
 keyword::String -> Parser ()
 keyword w = string w *> notFollowedBy alphaNumChar *> whiteSpace
 parens = between (symbol "(") (symbol ")")
